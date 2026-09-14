@@ -1,11 +1,19 @@
 // core/ — pure deterministic simulation (tech-spec §3).
 // No three.js, no DOM, no wall clock, no Math.random. Fixed 30Hz ticks.
 
+import { DIRECTION_VECTORS, type Command } from './commands';
+import type { SimEvent } from './events';
+import { type PlayerState, resolveMovement } from './player';
+import { parseLevel, type TileGrid } from './tileGrid';
+
 export const TICK_RATE = 30;
+const TICK_DT = 1 / TICK_RATE;
 
 export interface GameState {
   seed: number;
   tick: number;
+  grid: TileGrid;
+  player: PlayerState;
 }
 
 /** Mulberry32 — small, fast, seedable PRNG for deterministic sim randomness. */
@@ -20,10 +28,30 @@ export function createRng(seed: number): () => number {
   };
 }
 
-export function createGameState(seed: number): GameState {
-  return { seed, tick: 0 };
+export function createGameState(seed: number, levelRows: readonly string[]): GameState {
+  const { grid, playerStart } = parseLevel(levelRows);
+  return { seed, tick: 0, grid, player: playerStart };
 }
 
-export function advanceTick(state: GameState): GameState {
-  return { ...state, tick: state.tick + 1 };
+function latestMoveDirection(commands: readonly Command[]): { dx: number; dy: number } | null {
+  let latest: { dx: number; dy: number } | null = null;
+  for (const command of commands) {
+    if (command.type === 'move') {
+      latest = DIRECTION_VECTORS[command.direction];
+    }
+  }
+  return latest;
+}
+
+export function advanceTick(
+  state: GameState,
+  commands: readonly Command[] = [],
+): { state: GameState; events: SimEvent[] } {
+  const direction = latestMoveDirection(commands);
+  const { grid, player, events } = resolveMovement(state.grid, state.player, direction, TICK_DT);
+
+  return {
+    state: { ...state, tick: state.tick + 1, grid, player },
+    events,
+  };
 }

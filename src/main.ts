@@ -1,9 +1,10 @@
-import { createGameState, TICK_RATE } from './core/sim';
+import { describeDemo } from './app';
 
-// Scaffold entry point. The renderer lands with its own issue; until then this
-// proves the phone→dev-server loop and that core is importable from the app.
+// Scaffold entry point. Boots the same core sim composition app.test.ts
+// exercises (grid parse → advanceTick loop), proving core is wired end to
+// end. The renderer lands with its own issue; until then this just proves
+// the phone→dev-server loop and that core is reachable from the app.
 const app = document.getElementById('app');
 if (app) {
-  const state = createGameState(42);
-  app.textContent = `Digger Versus scaffold — sim ready (seed ${state.seed}, ${TICK_RATE} ticks/s)`;
+  app.textContent = describeDemo();
 }
