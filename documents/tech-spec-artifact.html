@@ -1,0 +1,227 @@
+<title>Digger Versus Technical Spec</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wght@600;700&family=Source+Sans+3:ital,wght@0,400;0,600;1,400&family=JetBrains+Mono:wght@400;500&display=swap">
+<style>
+  :root{
+    --ground:#f7f3ec; --panel:#efe8dc; --line:#e0d6c6;
+    --ink:#29221b; --muted:#7a6f63; --accent:#a8672b; --accent-soft:#c58a4e;
+    --code-bg:#efe9df;
+  }
+  @media (prefers-color-scheme: dark){
+    :root:not([data-theme="light"]){
+      --ground:#171310; --panel:#201a14; --line:#372e24;
+      --ink:#ece4d8; --muted:#9c9083; --accent:#e0a458; --accent-soft:#a8763f;
+      --code-bg:#211b15;
+    }
+  }
+  :root[data-theme="dark"]{
+    --ground:#171310; --panel:#201a14; --line:#372e24;
+    --ink:#ece4d8; --muted:#9c9083; --accent:#e0a458; --accent-soft:#a8763f;
+    --code-bg:#211b15;
+  }
+  *{box-sizing:border-box; margin:0}
+  body{
+    background:var(--ground); color:var(--ink);
+    font-family:"Source Sans 3",system-ui,sans-serif; font-size:17px; line-height:1.6;
+    padding:0 20px 80px;
+  }
+  main{max-width:74ch; margin:0 auto}
+  header{padding:56px 0 28px; border-bottom:2px solid var(--ink); margin-bottom:8px}
+  .kicker{font-family:"JetBrains Mono",monospace; font-size:12px; letter-spacing:.18em; text-transform:uppercase; color:var(--accent); margin-bottom:14px}
+  h1{font-family:Archivo,system-ui,sans-serif; font-weight:700; font-size:clamp(30px,6vw,44px); line-height:1.08; text-wrap:balance}
+  .standfirst{margin-top:16px; font-size:18px; color:var(--muted); max-width:60ch}
+  .standfirst b{color:var(--ink)}
+  nav{display:flex; flex-wrap:wrap; gap:6px 14px; padding:18px 0; border-bottom:1px solid var(--line); font-size:14px}
+  nav a{color:var(--muted); text-decoration:none}
+  nav a:hover{color:var(--accent)}
+  nav a b{color:var(--accent); font-family:"JetBrains Mono",monospace; font-weight:500; font-size:12px}
+  section{padding-top:34px}
+  h2{font-family:Archivo,system-ui,sans-serif; font-weight:600; font-size:23px; text-wrap:balance; scroll-margin-top:20px}
+  h2 .n{color:var(--accent); font-family:"JetBrains Mono",monospace; font-size:16px; font-weight:500; margin-right:10px}
+  .src{font-size:13px; color:var(--muted); font-style:italic; margin:4px 0 12px}
+  p{margin:10px 0; max-width:68ch}
+  ul{margin:10px 0 10px 2px; padding-left:22px}
+  li{margin:6px 0}
+  li::marker{color:var(--accent-soft)}
+  b{font-weight:600}
+  .tablewrap{overflow-x:auto; margin:14px 0}
+  table{border-collapse:collapse; font-size:15px; min-width:540px}
+  th{font-family:Archivo,system-ui,sans-serif; font-weight:600; text-align:left; font-size:13px; letter-spacing:.06em; text-transform:uppercase; color:var(--muted)}
+  th,td{padding:8px 14px 8px 0; border-bottom:1px solid var(--line); vertical-align:top}
+  code,pre{font-family:"JetBrains Mono",monospace; font-size:.85em}
+  code{background:var(--code-bg); border:1px solid var(--line); border-radius:4px; padding:1px 5px}
+  pre{background:var(--code-bg); border:1px solid var(--line); border-radius:8px; padding:14px 16px; overflow-x:auto; line-height:1.55; margin:14px 0}
+  pre code{background:none; border:none; padding:0}
+  .callout{background:var(--panel); border-left:3px solid var(--accent); border-radius:0 8px 8px 0; padding:12px 16px; margin:14px 0}
+  ol{margin:10px 0; padding-left:24px}
+  ol li{margin:7px 0}
+  .foot{margin-top:48px; padding-top:16px; border-top:1px solid var(--line); font-size:13px; color:var(--muted)}
+</style>
+
+<main>
+<header>
+  <div class="kicker">Locked · build-from document · 2026-09-14</div>
+  <h1>Digger Versus Technical Spec</h1>
+  <p class="standfirst">Companion to the game design document. Every decision below was resolved through the project's wayfinder map; the tracker tickets in the repo (<code>tracker/</code>) hold the full reasoning and research. <b>Changing a decision means reopening its ticket, not silently diverging.</b></p>
+</header>
+
+<nav>
+  <a href="#s1"><b>1</b> Scope</a><a href="#s2"><b>2</b> Stack</a><a href="#s3"><b>3</b> Architecture</a>
+  <a href="#s4"><b>4</b> Rendering</a><a href="#s5"><b>5</b> Controls</a><a href="#s6"><b>6</b> Game rules</a>
+  <a href="#s7"><b>7</b> Enemies</a><a href="#s8"><b>8</b> Boss</a><a href="#s9"><b>9</b> Cards</a>
+  <a href="#s10"><b>10</b> Levels</a><a href="#s11"><b>11</b> Save</a><a href="#s12"><b>12</b> Juice</a>
+  <a href="#s13"><b>13</b> Assets</a><a href="#s14"><b>14</b> Build order</a><a href="#s15"><b>15</b> Open items</a>
+</nav>
+
+<section id="s1"><h2><span class="n">1</span>Scope of v1</h2>
+<ul>
+<li><b>v1 = World 1, complete</b>: 8 levels (collection, escape, puzzle, chase types) ending in The Drill boss, plus the upgrade-card system and 3 difficulties.</li>
+<li><b>Fully offline</b>: local save only. No backend, accounts, ads, or IAP.</li>
+<li><b>Platform</b>: Android via Google Play, packaged with Capacitor.</li>
+<li><b>Out of scope</b>: multiplayer stack/netcode, monetization, worlds 2–5, leaderboards/cloud save.</li>
+</ul>
+<div class="callout"><b>Standing preference:</b> game experience first, visual polish later — grey-box until fun. Art is production work, never a gate.</div>
+</section>
+
+<section id="s2"><h2><span class="n">2</span>Stack</h2>
+<div class="tablewrap"><table>
+<tr><th>Layer</th><th>Choice</th><th>Why</th></tr>
+<tr><td>Language / build</td><td>TypeScript + Vite</td><td>Solo JS dev; type safety across many interacting systems</td></tr>
+<tr><td>Rendering</td><td>three.js</td><td>WebGL; clay look achievable; web skillset</td></tr>
+<tr><td>Packaging</td><td><b>Capacitor</b></td><td>Only wrapper with maintained plugins for haptics + future ads/billing; TWA can't show AdMob; Cordova winding down; Tauri needs Rust</td></tr>
+<tr><td>Physics</td><td>none</td><td>Tile-grid game rules, not simulation</td></tr>
+<tr><td>Entities</td><td>plain TS (no ECS)</td><td>~50 entities max; ECS benefits don't apply</td></tr>
+<tr><td>Backend</td><td>none in v1</td><td>Offline by decision</td></tr>
+</table></div>
+<p>Key plugins: <code>@capacitor/haptics</code>, <code>@capacitor/screen-orientation</code>, <code>@capacitor/preferences</code>.</p>
+</section>
+
+<section id="s3"><h2><span class="n">3</span>Architecture</h2>
+<pre><code>core/      pure deterministic simulation — imports NOTHING from other layers
+render/    three.js; reads core state, consumes core events
+input/     touch/keyboard → commands
+audio/     consumes core events (production-time)
+platform/  Capacitor glue (haptics, save, lifecycle)</code></pre>
+<ul>
+<li><b>Fixed timestep</b>: core ticks at <b>30/sec</b>; renderer draws at 60fps interpolating between the last two states, with clamped catch-up.</li>
+<li><b>Commands in</b>: input produces <code>move(dir8) | shoot | useAbility</code> queued into ticks. Touch never mutates state.</li>
+<li><b>State + events out</b>: renderer reads positions from state each frame and consumes one-shot events (<code>sack-wobble-started</code>, <code>enemy-crushed</code>…) for effects.</li>
+<li><b>Determinism, same-device level</b>: seeded RNG, no wall clock, fixed ticks — enough for replays, headless tests, and <b>server-authoritative</b> multiplayer later. <b>Lockstep is permanently ruled out.</b></li>
+<li><b>Movement</b>: continuous fractional positions over a tile grid; dirt clears per tile; hard rock takes 2 dig-hits.</li>
+<li>Module boundaries lint-enforced; the core runs headless in unit tests.</li>
+</ul>
+</section>
+
+<section id="s4"><h2><span class="n">4</span>Rendering &amp; Look</h2>
+<p class="src">"Soft Clay · Lit" — chosen from the live look prototype; performance rules from the Android WebView research.</p>
+<ul>
+<li>Straight-on perspective camera (~35° fov), soft real lighting (<code>MeshStandardMaterial</code>, roughness ≈ .85), rounded tiles, <b>16 tiles across</b>, camera follows the player. <i>Provisional: re-judge once the first real Blender model exists; <b>matcap is the performance fallback</b>.</i></li>
+<li><b>Day-one performance rules</b>: <code>InstancedMesh</code> per tile type (O(1) dig updates); ≤3 dynamic lights, 1 shadow-caster max, blob shadows; <code>devicePixelRatio</code> capped 1.5–2; explicit WebGL context-loss handlers wired to app pause/resume; pooled instanced particles (200–500); frame-time quality ladder, never skipped rAF.</li>
+<li><b>Target floor (2026)</b>: Helio G85/G99-class, Mali-G52/G57, 4GB RAM. Test the packaged APK via <code>chrome://inspect</code>.</li>
+</ul>
+</section>
+
+<section id="s5"><h2><span class="n">5</span>Controls</h2>
+<ul>
+<li><b>Landscape only.</b> Fixed virtual joystick bottom-left; <b>8-way snap</b> steering. Diagonal digging kept (the 1983 original was 4-way; this is a deliberate upgrade).</li>
+<li>Auto-dig while moving; carried diamonds slow the digger per the design doc.</li>
+<li><b>Button cluster</b> bottom-right, 2–3 button ceiling: Shoot ~84dp + ability ~64dp + one reserved slot. <b>Shoot wears a heat-gauge ring filling toward a red jam</b> (deliberately not a cooldown); the ability button gets an opposite-direction cooldown sweep.</li>
+<li>Respect Android gesture-navigation insets (runtime query; <code>viewport-fit=cover</code>). Left-hand mirroring: future config flag.</li>
+</ul>
+</section>
+
+<section id="s6"><h2><span class="n">6</span>Core Game Rules</h2>
+<p>Straight from the design doc §2, implemented as sim systems: dig &amp; collect · gold sacks (undermine → wobble telegraph → fall → crush; break when falling ≥2 tiles; pushable) · heat-meter shooting (kills enemies; only slows/pushes players — matters for future 1v1) · cherry → 5s frenzy · the bank (undeposited diamonds at risk, weight slowdown) · two ground types.</p>
+<ul><li><b>Combo</b>: kills within a <b>3s window</b> chain; +0.5× score per kill, <b>cap 3×</b>. State lives in the sim; presentation in render.</li></ul>
+</section>
+
+<section id="s7"><h2><span class="n">7</span>Enemies</h2>
+<ul>
+<li><b>Shared flow field</b>: BFS from the player over the tunnel graph a few times per second — chase steps downhill, frenzy-flee steps uphill. One computation serves every slime.</li>
+<li><b>No corner-cutting</b>: diagonal moves only when both orthogonal neighbors are open; sacks block the graph.</li>
+<li><b>Chase-accuracy knob</b>: wrong-turn chance ~25% Easy / ~10% Medium / ~0% Hard.</li>
+<li><b>Spawners</b>: ramping trickle per spawn point (interval shrinks, capped), set in the level file. Sealed-off slimes <b>wander</b>, never camp.</li>
+<li><b>One slime entity, typed by data</b>: Basic / Nimble / Puffy (splits on crush) / Swarm (spawns grouped).</li>
+</ul>
+</section>
+
+<section id="s8"><h2><span class="n">8</span>The Drill — World 1 Boss</h2>
+<ul>
+<li><b>Special entity with its own system</b>; the "enemies don't dig" rule stays intact everywhere else.</li>
+<li><b>Greedy straight-line burrow</b> toward the player — predictable on purpose: the fight is won by luring it under sacks. Its tunnels become normal tunnels.</li>
+<li><b>3 sack hits to win</b>. Escalation per hit: faster, shorter telegraphs; <b>cave-ins</b> after hit 1 — ceiling chunks collapse on the player's tile, telegraphed by falling dust.</li>
+<li><b>Re-arming sack alcoves</b> keep the fight always winnable. Death restarts the boss level.</li>
+</ul>
+</section>
+
+<section id="s9"><h2><span class="n">9</span>Upgrade Cards (campaign only)</h2>
+<ul>
+<li><b>Modifiers layer</b>: base stats from <code>tuning.json</code>; cards push <code>{stat, op, value}</code> entries; systems read effective stats through the stack; level end clears the list.</li>
+<li><b>Registry</b>: numeric cards are pure data; specials add a named code hook (<code>onHit</code>, <code>onKill</code>, <code>autoFire</code>).</li>
+<li><b>Draw</b>: seeded 3-card pick per bank level-up; rarity weights start at <b>70/25/5</b>; taken one-shots excluded; no duplicates in a draw; no reroll.</li>
+<li><b>v1 pool — all 15 doc cards</b>: Fast Legs · Sharp Drill · Light Armor · Double Shot · Fast Cooling · Heavy Sack · Collection Radius · Double Diamond Value · Deep Pocket · Shield · Fast Respawn · Push Wave · <b>Lightning · Super Magnet · King Midas</b>.</li>
+</ul>
+</section>
+
+<section id="s10"><h2><span class="n">10</span>Levels, Tuning, Difficulty</h2>
+<p>One JSON file per level: an ASCII tile grid plus structured fields (type + params, spawners, star thresholds, par time). TS-typed schema, validated at load. Hand-authored for v1; the future random-challenge generator emits the same format.</p>
+<pre><code>"grid": [
+  "DDDDDDDDDDDDDDDDDDDDDD",
+  "DDD*DDDDDD DDDD*DDDDDD",
+  "DDsDDG DDD DD*DDDDRRDD",   //  D dirt · R rock · ␣ tunnel
+  "DDP        DDD DDDRRDD",   //  * diamond · G sack · B bank
+  ...                         //  s spawner · P player start
+]</code></pre>
+<ul>
+<li><b><code>tuning.json</code></b> holds every game number. Layering: global defaults ← difficulty multipliers ← per-level overrides. <b>Difficulty is data, not code.</b></li>
+<li><b>Stars</b>: 1★ finish · 2★ ≥80% diamonds · 3★ + beat par time. One star set per level across difficulties. No hard timers outside escape/chase types.</li>
+</ul>
+</section>
+
+<section id="s11"><h2><span class="n">11</span>Save System</h2>
+<p>One versioned JSON document in <code>@capacitor/preferences</code> (<code>{version: 1, …}</code> + load-time migrations). Persists per-level stars &amp; best times, unlocks, selected character, difficulty, settings, tutorial-seen flags. Saves on level completion and settings change only; <b>no mid-level saves</b> — app kill restarts the level.</p>
+</section>
+
+<section id="s12"><h2><span class="n">12</span>Game Feel / Juice</h2>
+<ul>
+<li><b>One effects registry</b> in render: sim event → <code>{particles, shake, hitStopMs, haptic, sound}</code>. Sound slots exist now; audio sourcing is the one open item.</li>
+<li><b>Hit-stop ~80ms, big moments only</b> (sack crushes, boss hits). Hit-stop and shake are render-only — the sim never pauses.</li>
+<li><b>Haptic tiers</b> light / medium / heavy via Capacitor; a <b>"reduce effects"</b> setting dampens shake and flashing.</li>
+</ul>
+</section>
+
+<section id="s13"><h2><span class="n">13</span>Asset Pipeline</h2>
+<ul>
+<li><b>Blender → .glb</b> (Khronos exporter, "Actions" animation mode) with <b>Meshopt</b> compression; KTX2 deferred until profiling demands.</li>
+<li>glTF only carries PBR — <b>the clay look is applied in three.js at load</b> by swapping materials (soft-lit standard; matcap fallback).</li>
+<li>Hand-built deform-only armatures (avoid Rigify with glTF). Clips: ~6–9 per hero, 3–4 per slime, 8–12 boss.</li>
+<li><b>Budgets</b>: heroes 1,500–4,000 tris · slimes 200–800 · boss 3,000–8,000; vertex colors over textures where possible.</li>
+<li><b>Learning path</b>: Grant Abbitt's "Creating a Game Character: The Rogue" (free), then GameDev.tv low-poly characters (optional).</li>
+</ul>
+</section>
+
+<section id="s14"><h2><span class="n">14</span>Suggested Build Order</h2>
+<ol>
+<li>Project scaffold — Vite + TS, module boundaries + lint rules, headless core test rig</li>
+<li>Grey-box core loop: dig, collect, bank, sacks, heat-shooting (prototypes are reference, not codebase)</li>
+<li>Controls layer on a real device</li>
+<li>Level loader + <code>tuning.json</code>; author level 1</li>
+<li>Enemies (flow field, spawners) → levels 2–7</li>
+<li>Juice registry + combo</li>
+<li>Upgrade cards</li>
+<li>The Drill + level 8</li>
+<li>Art pass (Blender assets replace grey boxes) + audio</li>
+<li>Capacitor packaging, device testing, Play Store internal track</li>
+</ol>
+</section>
+
+<section id="s15"><h2><span class="n">15</span>Open Items (non-blocking)</h2>
+<ul>
+<li><b>Audio</b> sourcing/format — production-time; event hooks already specced.</li>
+<li><b>Provisional style flag</b> — re-judge "Soft Clay · Lit" vs matcap with the first real model.</li>
+<li><b>Ability-button offset</b> — tune on device ("up-and-inward" starting candidate).</li>
+</ul>
+</section>
+
+<p class="foot">Digger Versus · solo project · decisions tracked in <code>tracker/</code> (wayfinder map, 11 closed tickets, 3 research reports) · canonical copy: <code>documents/tech-spec.md</code></p>
+</main>

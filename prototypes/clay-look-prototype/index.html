@@ -1,0 +1,295 @@
+<!-- PROTOTYPE — throwaway. Answers wayfinder ticket "Clay look & camera prototype":
+     camera (ortho vs tilt vs straight), shading (matcap vs toon vs soft-lit),
+     tile edges (sharp vs rounded), and how many tiles fit a phone screen.
+     Three presets via ◀ ▶ (or arrow keys); "Mix" panel combines dimensions freely. -->
+<title>Digger Clay Lab</title>
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Rubik:wght@400;500;600&display=swap">
+<style>
+  :root{
+    --ground:#161210; --panel:#1e1813f2; --line:#3a3128;
+    --ink:#efe7da; --muted:#9c9083; --accent:#e0a458; --accent-ink:#241a0e;
+  }
+  *{box-sizing:border-box; margin:0}
+  html,body{height:100%}
+  body{background:var(--ground); color:var(--ink); font-family:Rubik,system-ui,-apple-system,sans-serif; overflow:hidden}
+  canvas{display:block}
+  .chip{
+    position:fixed; top:12px; left:12px; z-index:5;
+    background:var(--panel); border:1px solid var(--line); border-radius:999px;
+    padding:7px 14px; font-size:12px; letter-spacing:.08em; text-transform:uppercase; color:var(--muted);
+  }
+  .chip b{color:var(--ink); font-weight:600; letter-spacing:.08em}
+  .hud{
+    position:fixed; left:50%; bottom:calc(14px + env(safe-area-inset-bottom)); transform:translateX(-50%);
+    z-index:5; display:flex; flex-direction:column; align-items:center; gap:8px; width:min(94vw,560px);
+  }
+  .bar{
+    display:flex; align-items:center; gap:4px;
+    background:var(--panel); border:1px solid var(--line); border-radius:999px;
+    padding:6px; box-shadow:0 8px 28px rgba(0,0,0,.45); backdrop-filter:blur(8px);
+  }
+  .bar button, .mixbtn{
+    font:inherit; color:var(--ink); background:none; border:none; cursor:pointer; border-radius:999px;
+  }
+  .arrow{width:42px; height:42px; font-size:18px; flex:none}
+  .arrow:hover,.mixbtn:hover{background:#2a2219}
+  .arrow:focus-visible,.mixbtn:focus-visible,.seg button:focus-visible{outline:2px solid var(--accent); outline-offset:2px}
+  .label{min-width:190px; text-align:center; padding:0 6px}
+  .label small{display:block; font-size:10px; letter-spacing:.14em; color:var(--muted); text-transform:uppercase}
+  .label span{font-size:14px; font-weight:600}
+  .mixbtn{flex:none; padding:10px 14px; font-size:12px; font-weight:600; letter-spacing:.06em; text-transform:uppercase; color:var(--accent)}
+  .panel{
+    display:none; width:100%;
+    background:var(--panel); border:1px solid var(--line); border-radius:16px;
+    padding:12px; box-shadow:0 8px 28px rgba(0,0,0,.45); backdrop-filter:blur(8px);
+  }
+  .panel.open{display:grid; gap:10px; grid-template-columns:1fr 1fr}
+  @media (max-width:430px){ .panel.open{grid-template-columns:1fr} }
+  .group>small{display:block; font-size:10px; letter-spacing:.14em; text-transform:uppercase; color:var(--muted); margin:0 0 5px 4px}
+  .seg{display:flex; background:#141009; border:1px solid var(--line); border-radius:10px; padding:3px; gap:3px}
+  .seg button{
+    flex:1; font:inherit; font-size:12px; font-weight:500; padding:8px 4px; border:none; border-radius:7px;
+    background:none; color:var(--muted); cursor:pointer; white-space:nowrap;
+  }
+  .seg button.on{background:var(--accent); color:var(--accent-ink); font-weight:600}
+</style>
+
+<div class="chip"><b>Digger Versus</b> · look prototype</div>
+
+<div class="hud">
+  <div class="panel" id="panel">
+    <div class="group"><small>Camera</small>
+      <div class="seg" data-key="cam">
+        <button data-v="ortho">Flat ortho</button><button data-v="tilt">2.5D tilt</button><button data-v="straight">Persp. straight</button>
+      </div></div>
+    <div class="group"><small>Shading</small>
+      <div class="seg" data-key="shade">
+        <button data-v="matcap">Matcap</button><button data-v="toon">Toon</button><button data-v="soft">Soft lit</button>
+      </div></div>
+    <div class="group"><small>Tile edges</small>
+      <div class="seg" data-key="tile">
+        <button data-v="sharp">Sharp</button><button data-v="round">Rounded</button>
+      </div></div>
+    <div class="group"><small>Tiles across screen</small>
+      <div class="seg" data-key="width">
+        <button data-v="12">12</button><button data-v="16">16</button><button data-v="20">20</button>
+      </div></div>
+  </div>
+  <div class="bar">
+    <button class="arrow" id="prev" aria-label="Previous look">◀</button>
+    <div class="label"><small id="key">Look A</small><span id="name">Flat Ortho · Matcap</span></div>
+    <button class="arrow" id="next" aria-label="Next look">▶</button>
+    <button class="mixbtn" id="mix">Mix</button>
+  </div>
+</div>
+
+<script type="importmap">{"imports":{"three":"./three.module.js"}}</script>
+<script type="module">
+import * as THREE from 'three';
+
+/* ---------- the field: a hand-drawn cross-section, 20 x 12 tiles ----------
+   D dirt · R hard rock · space tunnel · * diamond · G sack · W wobbling sack
+   P player · S slime · B bank */
+const MAP = [
+  "DDDDDDDDDDDDDDDDDDDD",
+  "DDD*DDDDD DDDD*DDDDD",
+  "DDDDDDDDD DDDDDDDRDD",
+  "DDDDDW DD DD*DDDDRDD",
+  "DD        DDD DDDRDD",
+  "D*DDD DDDDD DDDDDDDD",
+  "DDDDD DDDDD DDGDDDDD",
+  "DD    S DD  DDDDDDDD",
+  "DD DDRRDD DDDDDD*DDD",
+  "DD*DDRRDD DDDDDDDDDD",
+  "DDDDDDDDD DD*DDDD*DD",
+  "DDDDDDDDDDDDBDDDDDDD",
+];
+const W = 20, H = MAP.length, CX = W/2 - .5, CY = -(H/2 - .5);
+
+const state   = { cam:'ortho', shade:'matcap', tile:'sharp', width:16 };
+const presets = [
+  { key:'A', name:'Flat Ortho · Matcap', cam:'ortho',    shade:'matcap', tile:'sharp', width:16 },
+  { key:'B', name:'Tilted 2.5D · Toon',  cam:'tilt',     shade:'toon',   tile:'round', width:16 },
+  { key:'C', name:'Soft Clay · Lit',     cam:'straight', shade:'soft',   tile:'round', width:16 },
+];
+
+const renderer = new THREE.WebGLRenderer({ antialias:true });
+renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
+document.body.prepend(renderer.domElement);
+
+const scene = new THREE.Scene();
+scene.background = new THREE.Color('#8ec7e6');           // sky behind everything
+
+const ambient = new THREE.AmbientLight('#ffffff', .55);
+const sun     = new THREE.DirectionalLight('#fff2dc', 1.0); sun.position.set(6, 9, 7);
+const hemi    = new THREE.HemisphereLight('#fff6e6', '#3a2a1e', .9);
+scene.add(ambient, sun, hemi);
+
+/* ---------- shading modes ---------- */
+function matcapTexture(){
+  const c = document.createElement('canvas'); c.width = c.height = 256;
+  const g = c.getContext('2d');
+  const grad = g.createRadialGradient(96, 88, 12, 128, 128, 150);
+  grad.addColorStop(0, '#ffffff'); grad.addColorStop(.35, '#cfcac2');
+  grad.addColorStop(.75, '#79726a'); grad.addColorStop(1, '#3c3733');
+  g.fillStyle = grad; g.fillRect(0, 0, 256, 256);
+  const t = new THREE.CanvasTexture(c); t.colorSpace = THREE.SRGBColorSpace; return t;
+}
+function gradientMap(){
+  const t = new THREE.DataTexture(new Uint8Array([90, 150, 210, 255]), 4, 1, THREE.RedFormat);
+  t.minFilter = t.magFilter = THREE.NearestFilter; t.needsUpdate = true; return t;
+}
+const MATCAP = matcapTexture(), GRAD = gradientMap();
+function makeMat(color){
+  if (state.shade === 'matcap') return new THREE.MeshMatcapMaterial({ color, matcap: MATCAP });
+  if (state.shade === 'toon')   return new THREE.MeshToonMaterial({ color, gradientMap: GRAD });
+  return new THREE.MeshStandardMaterial({ color, roughness:.85, metalness:0 });
+}
+
+/* ---------- geometry ---------- */
+function roundedTile(){
+  const r = .16, s = .96, sh = new THREE.Shape();
+  sh.moveTo(-s/2+r, -s/2);
+  sh.lineTo(s/2-r, -s/2);  sh.quadraticCurveTo(s/2, -s/2, s/2, -s/2+r);
+  sh.lineTo(s/2, s/2-r);   sh.quadraticCurveTo(s/2, s/2, s/2-r, s/2);
+  sh.lineTo(-s/2+r, s/2);  sh.quadraticCurveTo(-s/2, s/2, -s/2, s/2-r);
+  sh.lineTo(-s/2, -s/2+r); sh.quadraticCurveTo(-s/2, -s/2, -s/2+r, -s/2);
+  const geo = new THREE.ExtrudeGeometry(sh, { depth:.7, bevelEnabled:true, bevelSize:.07, bevelThickness:.09, bevelSegments:3, curveSegments:5 });
+  geo.translate(0, 0, -.45); return geo;
+}
+const GEO = {
+  sharp: new THREE.BoxGeometry(.99, .99, .9),
+  round: roundedTile(),
+  blob:  new THREE.SphereGeometry(.4, 24, 18),
+  eye:   new THREE.SphereGeometry(.075, 10, 8),
+  pupil: new THREE.SphereGeometry(.035, 8, 6),
+  gem:   new THREE.OctahedronGeometry(.32),
+  sack:  new THREE.SphereGeometry(.4, 16, 12),
+  neck:  new THREE.CylinderGeometry(.09, .14, .18, 10),
+  bank:  new THREE.TorusGeometry(.3, .1, 12, 24),
+  grass: new THREE.BoxGeometry(1, .18, 1.02),
+};
+
+/* ---------- build the scene (rebuilt on every look change) ---------- */
+let world = null, animated = { gems:[], wobble:null, slime:null, player:null };
+function jitter(hex, i){
+  const c = new THREE.Color(hex), h = {};
+  c.getHSL(h); c.setHSL(h.h, h.s, h.l * (0.92 + ((i * 2654435761 >>> 0) % 100) / 100 * 0.16));
+  return c;
+}
+function build(){
+  if (world){ world.removeFromParent(); world.traverse(o => { o.material?.dispose?.(); }); }
+  world = new THREE.Group(); scene.add(world);
+  animated = { gems:[], wobble:null, slime:null, player:null };
+
+  const wall = new THREE.Mesh(new THREE.PlaneGeometry(W + .4, H + .4), new THREE.MeshBasicMaterial({ color:'#221510' }));
+  wall.position.set(CX, CY, -.6); world.add(wall);
+
+  const tileGeo = GEO[state.tile === 'round' ? 'round' : 'sharp'];
+  const add = (mesh, x, y, z = 0) => { mesh.position.set(x, -y, z); world.add(mesh); return mesh; };
+
+  for (let y = 0; y < H; y++) for (let x = 0; x < W; x++){
+    const ch = MAP[y][x];
+    if (ch === 'D' || ch === 'R'){
+      const col = ch === 'R' ? jitter('#6e6862', x + y * W) : jitter('#a9714b', x + y * W);
+      add(new THREE.Mesh(tileGeo, makeMat(col)), x, y);
+    }
+    if (y === 0) add(new THREE.Mesh(GEO.grass, makeMat(jitter('#6fae4e', x))), x, -0.585);
+    if (ch === '*'){
+      const gem = add(new THREE.Mesh(GEO.gem, new THREE.MeshBasicMaterial({ color:'#7be7f5' })), x, y, .55);
+      animated.gems.push(gem);
+    }
+    if (ch === 'G' || ch === 'W'){
+      const sack = new THREE.Group();
+      const body = new THREE.Mesh(GEO.sack, makeMat(new THREE.Color('#8a5a33'))); body.scale.set(1, 1.05, 1);
+      const neck = new THREE.Mesh(GEO.neck, makeMat(new THREE.Color('#6e4526'))); neck.position.y = .42;
+      sack.add(body, neck); add(sack, x, y, .1);
+      if (ch === 'W') animated.wobble = sack;
+    }
+    if (ch === 'B'){
+      const ring = add(new THREE.Mesh(GEO.bank, new THREE.MeshBasicMaterial({ color:'#ecc25c' })), x, y, .35);
+      ring.rotation.x = .25;
+    }
+    if (ch === 'P' || ch === 'S'){
+      const isP = ch === 'P', g = new THREE.Group();
+      const body = new THREE.Mesh(GEO.blob, makeMat(new THREE.Color(isP ? '#e8823c' : '#7bc950')));
+      body.scale.set(1, isP ? .95 : .78, 1); g.add(body);
+      for (const s of [-1, 1]){
+        const eye = new THREE.Mesh(GEO.eye, new THREE.MeshBasicMaterial({ color:'#fffdf6' }));
+        eye.position.set(s * .15, .1, .33); g.add(eye);
+        const pupil = new THREE.Mesh(GEO.pupil, new THREE.MeshBasicMaterial({ color:'#20180f' }));
+        pupil.position.set(s * .15, .1, .4); g.add(pupil);
+      }
+      add(g, x, y, .12); animated[isP ? 'player' : 'slime'] = g;
+    }
+  }
+  ambient.intensity = state.shade === 'toon' ? .5 : .25;
+  sun.intensity     = state.shade === 'matcap' ? 0 : 1.0;
+  hemi.intensity    = state.shade === 'soft' ? .9 : 0;
+}
+
+/* ---------- cameras ---------- */
+let camera;
+function setCamera(){
+  const aspect = innerWidth / innerHeight, w = state.width;
+  if (state.cam === 'ortho'){
+    camera = new THREE.OrthographicCamera(-w/2, w/2, w/2/aspect, -w/2/aspect, .1, 100);
+    camera.position.set(CX, CY, 30); camera.lookAt(CX, CY, 0);
+  } else {
+    camera = new THREE.PerspectiveCamera(state.cam === 'tilt' ? 40 : 35, aspect, .1, 200);
+    const vfov = camera.fov * Math.PI / 180;
+    const hfov = 2 * Math.atan(Math.tan(vfov / 2) * aspect);
+    const dist = (w / 2) / Math.tan(hfov / 2);
+    if (state.cam === 'tilt') camera.position.set(CX, CY + dist * .28, dist * .96);
+    else                      camera.position.set(CX, CY, dist);
+    camera.lookAt(CX, CY, 0);
+  }
+}
+
+/* ---------- HUD ---------- */
+const $ = id => document.getElementById(id);
+function currentPreset(){
+  return presets.find(p => ['cam','shade','tile','width'].every(k => String(p[k]) === String(state[k])));
+}
+function syncHUD(){
+  const p = currentPreset();
+  $('key').textContent  = p ? `Look ${p.key}` : 'Custom';
+  $('name').textContent = p ? p.name : 'Mixed look';
+  document.querySelectorAll('.seg').forEach(seg => {
+    const k = seg.dataset.key;
+    seg.querySelectorAll('button').forEach(b => b.classList.toggle('on', String(state[k]) === b.dataset.v));
+  });
+}
+function apply(){ build(); setCamera(); syncHUD(); }
+function usePreset(i){ Object.assign(state, presets[(i + presets.length) % presets.length]); apply(); }
+let idx = 0;
+$('prev').onclick = () => usePreset(--idx);
+$('next').onclick = () => usePreset(++idx);
+$('mix').onclick  = () => $('panel').classList.toggle('open');
+document.querySelectorAll('.seg button').forEach(b => b.onclick = () => {
+  const k = b.closest('.seg').dataset.key;
+  state[k] = k === 'width' ? +b.dataset.v : b.dataset.v; apply();
+});
+addEventListener('keydown', e => {
+  if (e.key === 'ArrowLeft') usePreset(--idx);
+  if (e.key === 'ArrowRight') usePreset(++idx);
+});
+addEventListener('resize', () => { renderer.setSize(innerWidth, innerHeight); setCamera(); });
+
+/* ---------- idle motion (the clay needs to breathe) ---------- */
+const still = matchMedia('(prefers-reduced-motion: reduce)').matches;
+renderer.setAnimationLoop(t => {
+  if (!still){
+    const s = t / 1000;
+    animated.gems.forEach((g, i) => { g.rotation.y = s * 1.2 + i; g.scale.setScalar(1 + .08 * Math.sin(s * 3 + i)); });
+    if (animated.wobble) animated.wobble.rotation.z = Math.sin(s * 9) * .09;
+    if (animated.slime)  animated.slime.scale.y  = 1 + .07 * Math.sin(s * 2.6);
+    if (animated.player) animated.player.position.y += Math.sin(s * 2) * .0009;
+  }
+  renderer.render(scene, camera);
+});
+
+renderer.setSize(innerWidth, innerHeight);
+usePreset(0);
+</script>
