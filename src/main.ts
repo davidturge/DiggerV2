@@ -1,30 +1,39 @@
-// Production entry point (index.html boots this). Wires keyboard input →
-// command queue → fixed-timestep core ticks → render-side interpolation →
-// three.js scene, per tech-spec §3/§4.
+// Production entry point (index.html boots this). Wires keyboard + touch
+// input → command queue → fixed-timestep core ticks → render-side
+// interpolation → three.js scene, per tech-spec §3/§4/§5.
 //
-// REACHABILITY NOTE: this file cannot run under vitest — there is no
-// DOM/WebGL context in the project's node test environment (no jsdom, no
-// headless-GL, checked for issue #2). Every piece of non-trivial logic this
-// file composes (the fixed-timestep accumulator, render interpolation,
+// REACHABILITY NOTE: this file cannot run under vitest with a real WebGL
+// context — there is no headless-GL in the project's test environment
+// (checked for issue #2). Every piece of non-trivial logic this file
+// composes (the fixed-timestep accumulator, render interpolation,
 // camera-follow smoothing, WASD→direction mapping, tile-instance indexing,
-// and webglcontextlost/restored wiring) is factored into src/render/*.ts and
-// covered by headless unit tests instead — this file itself is a thin
-// composition of those tested pieces plus the actual three.js/DOM calls, and
-// needs manual/browser verification (`npm run dev`) that a human should do.
-// This mirrors app.ts/app.test.ts's role for the core sim in issue #1, but
-// no equivalent headless harness is possible here because three.js requires
-// a real canvas/WebGL context.
+// webglcontextlost/restored wiring, and — new in issue #3 — the touch
+// joystick/button DOM wiring) is factored into src/render/*.ts and
+// src/input/*.ts and covered by unit tests instead. The touch pieces
+// (src/input/touchControls.ts's attachTouchJoystick/attachActionButtons) are
+// exercised under jsdom with real PointerEvents in
+// src/input/touchControls.dom.test.ts, dispatched at this file's actual
+// fixed joystick origin/geometry — the exact functions main.ts calls below,
+// not a hand-built harness. This file itself is a thin composition of those
+// tested pieces plus the actual three.js/DOM calls, and needs manual/browser
+// verification (`npm run dev`) that a human should do. This mirrors
+// app.ts/app.test.ts's role for the core sim in issue #1, but no equivalent
+// full-file headless harness is possible here because three.js requires a
+// real canvas/WebGL context.
 
 import * as THREE from 'three';
 import { DEMO_LEVEL } from './app';
 import type { Command } from './core/commands';
 import type { SimEvent } from './core/events';
 import { advanceTick, createGameState, TICK_RATE, type GameState } from './core/sim';
+import { ActionButtons } from './input/actionButtons';
+import { CommandQueue } from './input/commandQueue';
+import { directionFromKeys } from './input/keyboardInput';
+import { attachActionButtons, attachTouchJoystick } from './input/touchControls';
 import { smoothFollow } from './render/cameraFollow';
 import { registerContextLossHandlers } from './render/contextLoss';
 import { stepFixedTimestep } from './render/fixedTimestepLoop';
 import { interpolateVec2 } from './render/interpolation';
-import { directionFromKeys } from './render/keyboardInput';
 import { buildScene, type SceneHandle } from './render/sceneBuilder';
 import { toWorldX, toWorldY } from './render/worldSpace';
 
@@ -64,6 +73,14 @@ function boot(container: HTMLElement): void {
   window.addEventListener('keydown', (event) => heldKeys.add(event.key.toLowerCase()));
   window.addEventListener('keyup', (event) => heldKeys.delete(event.key.toLowerCase()));
 
+  // Touch: fixed joystick bottom-left + Shoot/Ability/reserved cluster
+  // bottom-right (tech-spec §5). Keyboard stays a separate, polled fallback —
+  // the touch stick's held direction takes priority over it when active.
+  const commandQueue = new CommandQueue();
+  const actionButtons = new ActionButtons(commandQueue);
+  const joystickHandle = attachTouchJoystick(container, commandQueue);
+  const actionButtonsHandle = attachActionButtons(container, actionButtons);
+
   function applyEvents(events: readonly SimEvent[]): void {
     for (const event of events) {
       if (event.type === 'tile-dug') {
@@ -74,8 +91,10 @@ function boot(container: HTMLElement): void {
 
   function tick(state: GameState): GameState {
     prevPlayer = state.player;
-    const direction = directionFromKeys(heldKeys);
-    const commands: Command[] = direction ? [{ type: 'move', direction }] : [];
+    actionButtons.update(TICK_DT);
+    const direction = commandQueue.moveDirection ?? directionFromKeys(heldKeys);
+    const commands: Command[] = commandQueue.drainOneShot();
+    if (direction) commands.push({ type: 'move', direction });
     const { state: nextState, events } = advanceTick(state, commands);
     applyEvents(events);
     return nextState;
@@ -136,6 +155,9 @@ function boot(container: HTMLElement): void {
       CAMERA_FOLLOW_PER_SECOND,
       frameDt,
     );
+
+    joystickHandle.render();
+    actionButtonsHandle.render();
 
     renderer.render(sceneHandle.scene, sceneHandle.camera);
     requestAnimationFrame(frame);
