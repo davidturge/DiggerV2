@@ -6,6 +6,7 @@ import { DIRECTION_VECTORS, type Command } from './commands';
 import type { SimEvent } from './events';
 import type { Level, LevelEntities } from './level';
 import { type PlayerState, resolveMovement } from './player';
+import { createSackStates, resolveSackPush, sackBlockedCells, updateSackPhysics, type GoldPiece, type SackState } from './sacks';
 import { parseLevel, type TileGrid } from './tileGrid';
 import type { ResolvedTuning } from './tuning';
 
@@ -18,6 +19,8 @@ export interface GameState {
   player: PlayerState;
   tuning: ResolvedTuning;
   entities: LevelEntities;
+  sacks: readonly SackState[];
+  goldPieces: readonly GoldPiece[];
 }
 
 /** Mulberry32 — small, fast, seedable PRNG for deterministic sim randomness. */
@@ -39,7 +42,7 @@ export function createGameState(
   entities: LevelEntities = EMPTY_ENTITIES,
 ): GameState {
   const { grid, playerStart } = parseLevel(levelRows, tuning.rockHitsToClear);
-  return { seed, tick: 0, grid, player: playerStart, tuning, entities };
+  return { seed, tick: 0, grid, player: playerStart, tuning, entities, sacks: createSackStates(entities.sacks), goldPieces: [] };
 }
 
 /** Builds core state + entity placements straight from a loaded level (tech-spec §10). */
@@ -63,10 +66,32 @@ export function advanceTick(
 ): { state: GameState; events: SimEvent[] } {
   const direction = latestMoveDirection(commands);
   const tickDt = 1 / state.tuning.tickRate;
-  const { grid, player, events } = resolveMovement(state.grid, state.player, direction, tickDt, state.tuning.playerSpeed);
+  const events: SimEvent[] = [];
+
+  const pushedSacks = resolveSackPush(state.grid, state.sacks, state.player, direction, events);
+  const blockedCells = sackBlockedCells(pushedSacks);
+  const { grid, player, events: moveEvents } = resolveMovement(
+    state.grid,
+    state.player,
+    direction,
+    tickDt,
+    state.tuning.playerSpeed,
+    blockedCells,
+  );
+  events.push(...moveEvents);
+
+  const physics = updateSackPhysics(grid, pushedSacks, player, tickDt, state.tuning);
+  events.push(...physics.events);
 
   return {
-    state: { ...state, tick: state.tick + 1, grid, player },
+    state: {
+      ...state,
+      tick: state.tick + 1,
+      grid,
+      player,
+      sacks: physics.sacks,
+      goldPieces: [...state.goldPieces, ...physics.goldPieces],
+    },
     events,
   };
 }

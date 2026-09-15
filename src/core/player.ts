@@ -1,6 +1,9 @@
 // core/ — continuous player position over the tile grid: 8-direction movement,
-// per-axis collision vs rock/bounds, auto-dig on cell entry, no corner-cutting
-// through diagonal gaps (tech-spec §3, §6; corner rule per tech-spec §7).
+// per-axis collision vs rock/bounds/blockedCells, auto-dig on cell entry, no
+// corner-cutting through diagonal gaps (tech-spec §3, §6; corner rule per
+// tech-spec §7). blockedCells is a generic extra-solid-cell set — core/sacks.ts
+// feeds it sack occupancy so a resting/wobbling/falling sack blocks movement
+// the same way rock does, without this module needing to know what a sack is.
 
 import { getCell, inBounds, isBlocking, setCell, type TileGrid } from './tileGrid';
 import type { SimEvent } from './events';
@@ -38,7 +41,13 @@ function overlappedCells(x: number, y: number, radius: number): TileRef[] {
   return cells;
 }
 
-function findBlockers(grid: TileGrid, x: number, y: number, radius: number): { blocked: boolean; blockers: TileRef[] } {
+function findBlockers(
+  grid: TileGrid,
+  x: number,
+  y: number,
+  radius: number,
+  blockedCells: ReadonlySet<string>,
+): { blocked: boolean; blockers: TileRef[] } {
   const blockers: TileRef[] = [];
   let blocked = false;
   for (const { col, row } of overlappedCells(x, y, radius)) {
@@ -46,7 +55,7 @@ function findBlockers(grid: TileGrid, x: number, y: number, radius: number): { b
       blocked = true;
       continue;
     }
-    if (isBlocking(getCell(grid, col, row))) {
+    if (isBlocking(getCell(grid, col, row)) || blockedCells.has(`${col},${row}`)) {
       blocked = true;
       blockers.push({ col, row });
     }
@@ -79,10 +88,11 @@ function resolveAxis(
   radius: number,
   events: SimEvent[],
   hitThisTick: Set<string>,
+  blockedCells: ReadonlySet<string>,
 ): { grid: TileGrid; value: number | null } {
   const x = axis === 'x' ? candidate : perpendicular;
   const y = axis === 'x' ? perpendicular : candidate;
-  const { blocked, blockers } = findBlockers(grid, x, y, radius);
+  const { blocked, blockers } = findBlockers(grid, x, y, radius, blockedCells);
   if (!blocked) {
     return { grid, value: candidate };
   }
@@ -114,16 +124,26 @@ function autoDig(grid: TileGrid, x: number, y: number, radius: number, events: S
  * (tech-spec §7's no-corner-cutting rule, applied to the player too) — blocks
  * squeezing through the point where two rock tiles touch corner-to-corner.
  */
-function isDiagonalBlockedByCorner(grid: TileGrid, player: PlayerState, dx: number, dy: number): boolean {
+function isDiagonalBlockedByCorner(
+  grid: TileGrid,
+  player: PlayerState,
+  dx: number,
+  dy: number,
+  blockedCells: ReadonlySet<string>,
+): boolean {
   if (dx === 0 || dy === 0) return false;
   const col = Math.floor(player.x);
   const row = Math.floor(player.y);
   const sideCol = col + Math.sign(dx);
   const sideRow = row + Math.sign(dy);
-  const horizontalBlocked = !inBounds(grid, sideCol, row) || isBlocking(getCell(grid, sideCol, row));
-  const verticalBlocked = !inBounds(grid, col, sideRow) || isBlocking(getCell(grid, col, sideRow));
+  const horizontalBlocked =
+    !inBounds(grid, sideCol, row) || isBlocking(getCell(grid, sideCol, row)) || blockedCells.has(`${sideCol},${row}`);
+  const verticalBlocked =
+    !inBounds(grid, col, sideRow) || isBlocking(getCell(grid, col, sideRow)) || blockedCells.has(`${col},${sideRow}`);
   return horizontalBlocked && verticalBlocked;
 }
+
+const NO_BLOCKED_CELLS: ReadonlySet<string> = new Set();
 
 export function resolveMovement(
   grid: TileGrid,
@@ -131,6 +151,7 @@ export function resolveMovement(
   direction: { dx: number; dy: number } | null,
   dt: number,
   playerSpeed: number,
+  blockedCells: ReadonlySet<string> = NO_BLOCKED_CELLS,
 ): MoveResult {
   const events: SimEvent[] = [];
   if (!direction || (direction.dx === 0 && direction.dy === 0)) {
@@ -138,7 +159,7 @@ export function resolveMovement(
   }
 
   const { dx, dy } = direction;
-  if (isDiagonalBlockedByCorner(grid, player, dx, dy)) {
+  if (isDiagonalBlockedByCorner(grid, player, dx, dy, blockedCells)) {
     return { grid, player, events };
   }
 
@@ -149,14 +170,14 @@ export function resolveMovement(
 
   if (dx !== 0) {
     const candidateX = x + dx * playerSpeed * dt;
-    const resolved = resolveAxis(nextGrid, candidateX, y, 'x', PLAYER_RADIUS, events, hitThisTick);
+    const resolved = resolveAxis(nextGrid, candidateX, y, 'x', PLAYER_RADIUS, events, hitThisTick, blockedCells);
     nextGrid = resolved.grid;
     if (resolved.value !== null) x = resolved.value;
   }
 
   if (dy !== 0) {
     const candidateY = y + dy * playerSpeed * dt;
-    const resolved = resolveAxis(nextGrid, candidateY, x, 'y', PLAYER_RADIUS, events, hitThisTick);
+    const resolved = resolveAxis(nextGrid, candidateY, x, 'y', PLAYER_RADIUS, events, hitThisTick, blockedCells);
     nextGrid = resolved.grid;
     if (resolved.value !== null) y = resolved.value;
   }

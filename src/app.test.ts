@@ -1,5 +1,13 @@
 import { describe, expect, it } from 'vitest';
-import { describeDemo, runDemoTicks, createInitialGameState, DEFAULT_TUNING, loadWorld1Level1, TUNING_DATA } from './app';
+import {
+  describeDemo,
+  runDemoTicks,
+  runSackDemoTicks,
+  createInitialGameState,
+  DEFAULT_TUNING,
+  loadWorld1Level1,
+  TUNING_DATA,
+} from './app';
 import { advanceTick } from './core/sim';
 import { resolveTuning } from './core/tuning';
 
@@ -66,5 +74,34 @@ describe('real level + tuning composition (main.ts boot path)', () => {
     const expectedDx = state.tuning.playerSpeed * (1 / state.tuning.tickRate) * ticks;
     expect(state.player.x).toBeCloseTo(startX + expectedDx, 5);
     expect(events.some((e) => e.type === 'tile-dug' && e.tileType === 'dirt')).toBe(true);
+  });
+});
+
+// Runs the exact composition src/main.ts boots (createGameState + advanceTick
+// over SACK_DEMO_LEVEL, resolved with the real data/tuning.json via
+// DEFAULT_TUNING) — proves the gold-sack lifecycle (issue #6) is live in the
+// production tick path, not just exercised by core/sacks.test.ts's unit
+// tests. NOTE: data/levels/w1-01.json (the real World 1 Level 1 the game
+// actually boots into) has no "G" sacks placed on its grid — that's a
+// level-authoring/content decision, not a code gap — so this demo, like
+// runDemoTicks()'s grey-box corridor for digging, is what stands in for a
+// real level exercising the feature.
+describe('sack demo composition (issue #6)', () => {
+  it('undermining a sack by digging its support starts the wobble telegraph and it lands intact once the digger is clear', () => {
+    const { events, state } = runSackDemoTicks();
+
+    expect(events).toContainEqual({ type: 'sack-wobble-started', col: 1, row: 1 });
+    expect(events).toContainEqual({ type: 'sack-landed', col: 1, row: 2, tilesFallen: 1, brokeApart: false });
+    expect(events.some((e) => e.type === 'player-crushed')).toBe(false);
+    expect(state.sacks).toEqual([{ id: 0, col: 1, row: 2, status: 'resting', elapsedMs: 0, fallOriginRow: 1 }]);
+  });
+
+  it('drives the wobble timer from the real data/tuning.json sackWobbleMs, not a hardcoded shortcut', () => {
+    expect(DEFAULT_TUNING.sackWobbleMs).toBeGreaterThan(0);
+    expect(DEFAULT_TUNING.sackFallTilesPerSecond).toBeGreaterThan(0);
+
+    const { state } = runSackDemoTicks();
+    expect(state.tuning.sackWobbleMs).toBe(DEFAULT_TUNING.sackWobbleMs);
+    expect(state.tuning.sackFallTilesPerSecond).toBe(DEFAULT_TUNING.sackFallTilesPerSecond);
   });
 });

@@ -2,7 +2,9 @@
   "defaults": {
     "tickRate": 30,
     "playerSpeed": 4.5,
-    "rockHitsToClear": 2
+    "rockHitsToClear": 2,
+    "sackWobbleMs": 1800,
+    "sackFallTilesPerSecond": 6
   },
   "difficulty": {
     "easy": {},

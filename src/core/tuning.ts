@@ -11,11 +11,21 @@ export interface TuningDefaults {
   tickRate: number;
   playerSpeed: number;
   rockHitsToClear: number;
+  /** Wobble telegraph duration (design.md §2.4) between a sack losing support and it starting to fall. */
+  sackWobbleMs: number;
+  /** Fall speed once a sack drops, in tiles/second (tile-by-tile, tech-spec §6). */
+  sackFallTilesPerSecond: number;
 }
 
 export type ResolvedTuning = TuningDefaults;
 
-const TUNING_KEYS = ['tickRate', 'playerSpeed', 'rockHitsToClear'] as const satisfies readonly (keyof TuningDefaults)[];
+const TUNING_KEYS = [
+  'tickRate',
+  'playerSpeed',
+  'rockHitsToClear',
+  'sackWobbleMs',
+  'sackFallTilesPerSecond',
+] as const satisfies readonly (keyof TuningDefaults)[];
 
 const DIFFICULTIES: readonly Difficulty[] = ['easy', 'medium', 'hard'];
 
@@ -43,6 +53,8 @@ function parseDefaults(data: unknown): TuningDefaults {
     tickRate: readPositiveFiniteNumber(data, 'tickRate', 'defaults'),
     playerSpeed: readPositiveFiniteNumber(data, 'playerSpeed', 'defaults'),
     rockHitsToClear: readPositiveFiniteNumber(data, 'rockHitsToClear', 'defaults'),
+    sackWobbleMs: readPositiveFiniteNumber(data, 'sackWobbleMs', 'defaults'),
+    sackFallTilesPerSecond: readPositiveFiniteNumber(data, 'sackFallTilesPerSecond', 'defaults'),
   };
 }
 
