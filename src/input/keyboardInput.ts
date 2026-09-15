@@ -1,6 +1,6 @@
-// render/ — WASD → Command bridge (tech-spec §3, §5): keyboard is the
-// desktop-dev input path, translated into the same `move` command diagonal
-// touch steering will later produce; input never mutates state directly.
+// input/ — WASD → Command bridge (tech-spec §3, §5): keyboard is the
+// desktop-dev input path, translated into the same `move` command the touch
+// joystick produces; input never mutates state directly.
 
 import type { Direction8 } from '../core/commands';
 
