@@ -16,10 +16,10 @@
 // a real canvas/WebGL context.
 
 import * as THREE from 'three';
-import { DEMO_LEVEL } from './app';
+import { createInitialGameState } from './app';
 import type { Command } from './core/commands';
 import type { SimEvent } from './core/events';
-import { advanceTick, createGameState, TICK_RATE, type GameState } from './core/sim';
+import { advanceTick, type GameState } from './core/sim';
 import { smoothFollow } from './render/cameraFollow';
 import { registerContextLossHandlers } from './render/contextLoss';
 import { stepFixedTimestep } from './render/fixedTimestepLoop';
@@ -28,7 +28,6 @@ import { directionFromKeys } from './render/keyboardInput';
 import { buildScene, type SceneHandle } from './render/sceneBuilder';
 import { toWorldX, toWorldY } from './render/worldSpace';
 
-const TICK_DT = 1 / TICK_RATE;
 const MAX_CATCHUP_TICKS = 5;
 const MAX_FRAME_DT = 0.25; // guards against a huge dt after a tab/app was backgrounded
 const CAMERA_FOLLOW_PER_SECOND = 8;
@@ -46,10 +45,11 @@ function boot(container: HTMLElement): void {
   renderer.setPixelRatio(Math.min(window.devicePixelRatio, DEVICE_PIXEL_RATIO_CAP));
   container.appendChild(renderer.domElement);
 
-  let gameState: GameState = createGameState(1, DEMO_LEVEL);
+  let gameState: GameState = createInitialGameState();
+  const TICK_DT = 1 / gameState.tuning.tickRate;
   let prevPlayer = gameState.player;
   let currPlayer = gameState.player;
-  let sceneHandle: SceneHandle = buildScene(gameState.grid, gameState.player);
+  let sceneHandle: SceneHandle = buildScene(gameState.grid, gameState.player, gameState.entities);
 
   function resize(): void {
     const width = container.clientWidth || window.innerWidth;
@@ -94,7 +94,7 @@ function boot(container: HTMLElement): void {
       // assume three.js silently recovers GPU resources on its own
       // (tracker/research/threejs-android-performance.md §3).
       sceneHandle.dispose();
-      sceneHandle = buildScene(gameState.grid, gameState.player);
+      sceneHandle = buildScene(gameState.grid, gameState.player, gameState.entities);
       resize();
       accumulator = 0;
       lastTime = null;

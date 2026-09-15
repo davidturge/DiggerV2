@@ -4,7 +4,7 @@ import { buildTileIndex, collectTilePositions, tileKey } from './tileInstances';
 
 describe('collectTilePositions', () => {
   it('collects only cells of the requested type, in row-major order', () => {
-    const { grid } = parseLevel(['RD ', 'DDR']);
+    const { grid } = parseLevel(['RD ', 'DDR'], 2);
     expect(collectTilePositions(grid, 'dirt')).toEqual([
       { col: 1, row: 0 },
       { col: 0, row: 1 },
@@ -17,7 +17,7 @@ describe('collectTilePositions', () => {
   });
 
   it('returns an empty list when the type is absent', () => {
-    const { grid } = parseLevel(['   ']);
+    const { grid } = parseLevel(['   '], 2);
     expect(collectTilePositions(grid, 'rock')).toEqual([]);
   });
 });
