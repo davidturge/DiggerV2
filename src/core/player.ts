@@ -156,7 +156,7 @@ export function resolveMovement(
 
   if (dy !== 0) {
     const candidateY = y + dy * playerSpeed * dt;
-    const resolved = resolveAxis(nextGrid, x, candidateY, 'y', PLAYER_RADIUS, events, hitThisTick);
+    const resolved = resolveAxis(nextGrid, candidateY, x, 'y', PLAYER_RADIUS, events, hitThisTick);
     nextGrid = resolved.grid;
     if (resolved.value !== null) y = resolved.value;
   }

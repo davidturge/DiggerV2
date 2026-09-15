@@ -179,3 +179,32 @@ describe('determinism', () => {
     expect(runA.events).toEqual(runB.events);
   });
 });
+
+describe('vertical movement', () => {
+  // Regression: the y-axis resolveAxis call had its candidate/perpendicular
+  // arguments swapped, so pure n/s never moved and diagonals bent downward.
+  const CROSS = ['RRRRR', 'RR RR', 'RRPRR', 'RR RR', 'RRRRR'];
+
+  it.each([
+    ['n', -1],
+    ['s', 1],
+  ] as const)('moving %s changes y in that direction and leaves x alone', (direction, sign) => {
+    let state = createGameState(1, CROSS, TUNING);
+    const start = state.player;
+    for (let i = 0; i < 5; i++) {
+      state = advanceTick(state, [{ type: 'move', direction }]).state;
+    }
+    expect(Math.sign(state.player.y - start.y)).toBe(sign);
+    expect(state.player.x).toBe(start.x);
+  });
+
+  it('moving ne goes up and to the right', () => {
+    let state = createGameState(1, ['RRRRRR', 'RR   R', 'RR   R', 'RRP  R', 'RRRRRR'], TUNING);
+    const start = state.player;
+    for (let i = 0; i < 5; i++) {
+      state = advanceTick(state, [{ type: 'move', direction: 'ne' }]).state;
+    }
+    expect(state.player.x).toBeGreaterThan(start.x);
+    expect(state.player.y).toBeLessThan(start.y);
+  });
+});

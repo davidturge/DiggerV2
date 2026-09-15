@@ -12,10 +12,44 @@ export { JOYSTICK_MAX_RADIUS_PX };
 
 export const JOYSTICK_MARGIN_PX = 28;
 
-function joystickOrigin(): Point {
+/** Runtime gesture-nav / notch insets (tech-spec §5: "query at runtime"). */
+export interface SafeAreaInsets {
+  left: number;
+  bottom: number;
+}
+
+/**
+ * Reads the safe-area insets by letting the browser resolve CSS `env()` on a
+ * throwaway probe. Returns 0s where env() is unsupported (desktop, jsdom).
+ */
+export function readSafeAreaInsets(): SafeAreaInsets {
+  const probe = document.createElement('div');
+  Object.assign(probe.style, {
+    position: 'fixed',
+    visibility: 'hidden',
+    paddingLeft: 'env(safe-area-inset-left, 0px)',
+    paddingBottom: 'env(safe-area-inset-bottom, 0px)',
+  });
+  document.body.appendChild(probe);
+  const style = getComputedStyle(probe);
+  const insets = {
+    left: parseFloat(style.paddingLeft) || 0,
+    bottom: parseFloat(style.paddingBottom) || 0,
+  };
+  probe.remove();
+  return insets;
+}
+
+/**
+ * Where the joystick's center sits for a given viewport. The DOM base/knob
+ * and the pointer math BOTH derive from this one function, so the drawn
+ * center and the dead-zone center can't drift apart by the inset height
+ * (they did when the visuals used CSS env() but the math used innerHeight).
+ */
+export function computeJoystickOrigin(viewportHeight: number, insets: SafeAreaInsets): Point {
   return {
-    x: JOYSTICK_MARGIN_PX + JOYSTICK_MAX_RADIUS_PX,
-    y: window.innerHeight - JOYSTICK_MARGIN_PX - JOYSTICK_MAX_RADIUS_PX,
+    x: insets.left + JOYSTICK_MARGIN_PX + JOYSTICK_MAX_RADIUS_PX,
+    y: viewportHeight - insets.bottom - JOYSTICK_MARGIN_PX - JOYSTICK_MAX_RADIUS_PX,
   };
 }
 
@@ -31,11 +65,12 @@ export interface TouchJoystickHandle {
  * and wires pointer events into a VirtualJoystick backed by `queue`.
  */
 export function attachTouchJoystick(root: HTMLElement, queue: CommandQueue): TouchJoystickHandle {
+  // Insets are re-probed only on resize/orientation change (the probe touches
+  // the DOM); innerHeight is read live on every touch so the origin tracks
+  // the viewport even when no resize event fired (see the dom test).
+  let insets = readSafeAreaInsets();
+  const joystickOrigin = (): Point => computeJoystickOrigin(window.innerHeight, insets);
   const joystick = new VirtualJoystick(queue, joystickOrigin);
-  // Only used for the DOM elements' initial inline position — their `bottom`
-  // is CSS `env()`-relative and self-corrects on resize; `origin.x` never
-  // changes since it doesn't depend on window size.
-  const origin = joystickOrigin();
 
   const zone = document.createElement('div');
   zone.dataset.testid = 'joystick-zone';
@@ -53,12 +88,10 @@ export function attachTouchJoystick(root: HTMLElement, queue: CommandQueue): Tou
   const baseDiameter = JOYSTICK_MAX_RADIUS_PX * 2;
   Object.assign(base.style, {
     position: 'fixed',
-    left: `${origin.x}px`,
-    bottom: `calc(env(safe-area-inset-bottom, 0px) + ${JOYSTICK_MARGIN_PX}px)`,
     width: `${baseDiameter}px`,
     height: `${baseDiameter}px`,
     marginLeft: `${-JOYSTICK_MAX_RADIUS_PX}px`,
-    marginBottom: `${-JOYSTICK_MAX_RADIUS_PX}px`,
+    marginTop: `${-JOYSTICK_MAX_RADIUS_PX}px`,
     borderRadius: '50%',
     border: '2px solid rgba(239, 231, 218, 0.35)',
     background: 'rgba(30, 24, 19, 0.4)',
@@ -69,18 +102,29 @@ export function attachTouchJoystick(root: HTMLElement, queue: CommandQueue): Tou
   knob.dataset.testid = 'joystick-knob';
   Object.assign(knob.style, {
     position: 'fixed',
-    left: `${origin.x}px`,
-    bottom: `calc(env(safe-area-inset-bottom, 0px) + ${JOYSTICK_MARGIN_PX}px)`,
     width: '46px',
     height: '46px',
     marginLeft: '-23px',
-    marginBottom: '-23px',
+    marginTop: '-23px',
     borderRadius: '50%',
     background: '#e0a458',
     pointerEvents: 'none',
   });
 
   root.append(zone, base, knob);
+
+  // Pin the visuals to the same origin the pointer math uses; re-run whenever
+  // the viewport (and therefore the insets) can have changed.
+  const layout = (): void => {
+    insets = readSafeAreaInsets();
+    const origin = joystickOrigin();
+    for (const el of [base, knob]) {
+      el.style.left = `${origin.x}px`;
+      el.style.top = `${origin.y}px`;
+    }
+  };
+  layout();
+  window.addEventListener('resize', layout);
 
   const onPointerDown = (event: PointerEvent): void => {
     event.preventDefault();
@@ -106,6 +150,7 @@ export function attachTouchJoystick(root: HTMLElement, queue: CommandQueue): Tou
       knob.style.transform = `translate(${offset.x}px, ${offset.y}px)`;
     },
     destroy(): void {
+      window.removeEventListener('resize', layout);
       zone.removeEventListener('pointerdown', onPointerDown);
       zone.removeEventListener('pointermove', onPointerMove);
       zone.removeEventListener('pointerup', onPointerEnd);

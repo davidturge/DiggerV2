@@ -1,8 +1,27 @@
 // @vitest-environment jsdom
 import { describe, expect, it } from 'vitest';
 import { ActionButtons } from './actionButtons';
-import { attachActionButtons, attachTouchJoystick, JOYSTICK_MARGIN_PX, JOYSTICK_MAX_RADIUS_PX } from './touchControls';
+import {
+  attachActionButtons,
+  attachTouchJoystick,
+  computeJoystickOrigin,
+  JOYSTICK_MARGIN_PX,
+  JOYSTICK_MAX_RADIUS_PX,
+} from './touchControls';
 import { CommandQueue } from './commandQueue';
+
+describe('computeJoystickOrigin', () => {
+  it('lifts the origin by the bottom inset and shifts it right by the left inset', () => {
+    const flat = computeJoystickOrigin(800, { left: 0, bottom: 0 });
+    const gestureNav = computeJoystickOrigin(800, { left: 44, bottom: 34 });
+    expect(flat).toEqual({
+      x: JOYSTICK_MARGIN_PX + JOYSTICK_MAX_RADIUS_PX,
+      y: 800 - JOYSTICK_MARGIN_PX - JOYSTICK_MAX_RADIUS_PX,
+    });
+    expect(gestureNav.x - flat.x).toBe(44);
+    expect(flat.y - gestureNav.y).toBe(34);
+  });
+});
 
 describe('attachTouchJoystick (DOM)', () => {
   it('creates the zone, base, and knob visuals in the given root', () => {
@@ -76,6 +95,30 @@ describe('attachTouchJoystick (DOM)', () => {
     handle.destroy();
     root.remove();
     Object.defineProperty(window, 'innerHeight', { configurable: true, value: originalInnerHeight });
+  });
+
+  it('draws the base and knob at the same origin the pointer math uses', () => {
+    const root = document.createElement('div');
+    document.body.appendChild(root);
+    const queue = new CommandQueue();
+    const handle = attachTouchJoystick(root, queue);
+    const base = root.querySelector('[data-testid="joystick-base"]') as HTMLElement;
+    const knob = root.querySelector('[data-testid="joystick-knob"]') as HTMLElement;
+    const zone = root.querySelector('[data-testid="joystick-zone"]')!;
+
+    const originX = parseFloat(base.style.left);
+    const originY = parseFloat(base.style.top);
+    expect(knob.style.left).toBe(base.style.left);
+    expect(knob.style.top).toBe(base.style.top);
+
+    // A touch exactly on the drawn center must read as the dead zone, not a direction.
+    zone.dispatchEvent(new PointerEvent('pointerdown', { pointerId: 5, clientX: originX, clientY: originY, bubbles: true }));
+    expect(queue.moveDirection).toBeNull();
+    zone.dispatchEvent(new PointerEvent('pointermove', { pointerId: 5, clientX: originX, clientY: originY - 40, bubbles: true }));
+    expect(queue.moveDirection).toBe('n');
+
+    handle.destroy();
+    root.remove();
   });
 
   it('removes its elements and listeners on destroy', () => {
