@@ -1,0 +1,1 @@
+- [Render loop pattern](project_render_loop_pattern.md) — main.ts's RAF frame() calls handle.render() every frame unconditionally; check for missing dirty-checks on style writes.
