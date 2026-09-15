@@ -1,0 +1,8 @@
+# Night-shift harness config, sourced on the HOST by ~/.claude/nightshift/nightshift.sh
+# (explicit env vars still win over this file).
+#
+# Turn cap per issue. Every wave-1/2 run (#1–#4) exhausted the default of 40 —
+# the two that "passed" were simply green when cut off, and #3/#4 were parked
+# with half-finished renames. One tech-spec §14 slice takes ~100+ agent turns
+# (read spec + design doc, TDD several modules, wire the entry point, review, commit).
+NIGHTSHIFT_MAX_TURNS=120
