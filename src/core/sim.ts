@@ -1,19 +1,23 @@
 // core/ — pure deterministic simulation (tech-spec §3).
-// No three.js, no DOM, no wall clock, no Math.random. Fixed 30Hz ticks.
+// No three.js, no DOM, no wall clock, no Math.random. Fixed ticks (rate
+// resolved from tuning.json, tech-spec §10 — no hardcoded tick constant here).
 
 import { DIRECTION_VECTORS, type Command } from './commands';
 import type { SimEvent } from './events';
+import type { Level, LevelEntities } from './level';
 import { type PlayerState, resolveMovement } from './player';
 import { parseLevel, type TileGrid } from './tileGrid';
+import type { ResolvedTuning } from './tuning';
 
-export const TICK_RATE = 30;
-const TICK_DT = 1 / TICK_RATE;
+const EMPTY_ENTITIES: LevelEntities = { diamonds: [], sacks: [], bank: null, spawners: [] };
 
 export interface GameState {
   seed: number;
   tick: number;
   grid: TileGrid;
   player: PlayerState;
+  tuning: ResolvedTuning;
+  entities: LevelEntities;
 }
 
 /** Mulberry32 — small, fast, seedable PRNG for deterministic sim randomness. */
@@ -28,9 +32,19 @@ export function createRng(seed: number): () => number {
   };
 }
 
-export function createGameState(seed: number, levelRows: readonly string[]): GameState {
-  const { grid, playerStart } = parseLevel(levelRows);
-  return { seed, tick: 0, grid, player: playerStart };
+export function createGameState(
+  seed: number,
+  levelRows: readonly string[],
+  tuning: ResolvedTuning,
+  entities: LevelEntities = EMPTY_ENTITIES,
+): GameState {
+  const { grid, playerStart } = parseLevel(levelRows, tuning.rockHitsToClear);
+  return { seed, tick: 0, grid, player: playerStart, tuning, entities };
+}
+
+/** Builds core state + entity placements straight from a loaded level (tech-spec §10). */
+export function createGameStateFromLevel(seed: number, level: Level, tuning: ResolvedTuning): GameState {
+  return createGameState(seed, level.rows, tuning, level.entities);
 }
 
 function latestMoveDirection(commands: readonly Command[]): { dx: number; dy: number } | null {
@@ -48,7 +62,8 @@ export function advanceTick(
   commands: readonly Command[] = [],
 ): { state: GameState; events: SimEvent[] } {
   const direction = latestMoveDirection(commands);
-  const { grid, player, events } = resolveMovement(state.grid, state.player, direction, TICK_DT);
+  const tickDt = 1 / state.tuning.tickRate;
+  const { grid, player, events } = resolveMovement(state.grid, state.player, direction, tickDt, state.tuning.playerSpeed);
 
   return {
     state: { ...state, tick: state.tick + 1, grid, player },

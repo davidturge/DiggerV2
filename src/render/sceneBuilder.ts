@@ -6,9 +6,11 @@
 // worldSpace.ts/tileInstances.ts where it can be unit tested instead.
 
 import * as THREE from 'three';
+import { toEntityWorldPositions } from './entityInstances';
 import { collectTilePositions, buildTileIndex, tileKey, type TilePosition } from './tileInstances';
 import { tileCenterWorldX, tileCenterWorldY, toWorldX, toWorldY } from './worldSpace';
 import type { TileGrid } from '../core/tileGrid';
+import type { EntityPosition, LevelEntities } from '../core/level';
 
 const FOV_DEGREES = 35;
 const TILES_ACROSS = 16;
@@ -23,6 +25,11 @@ const TILE_COLORS: Record<DiggableType, number> = {
 const SKY_COLOR = 0x8ec7e6;
 const BACK_WALL_COLOR = 0x221510;
 const GRASS_COLOR = 0x6fae4e;
+
+const DIAMOND_COLOR = 0x63d6ff;
+const SACK_COLOR = 0xc9a227;
+const BANK_COLOR = 0x3b6fd4;
+const SPAWNER_COLOR = 0x2a1f18;
 
 const HIDDEN_MATRIX = new THREE.Matrix4().makeScale(0, 0, 0);
 
@@ -122,6 +129,73 @@ function buildPlayerShadow(): THREE.Mesh {
   return shadow;
 }
 
+interface EntityMarkerKind {
+  positions: readonly EntityPosition[];
+  geometry: THREE.BufferGeometry;
+  color: number;
+  roughness: number;
+  metalness: number;
+  z: number;
+  /** Cylinders are authored standing up; lay them flat as ground markers. */
+  layFlat?: boolean;
+}
+
+/**
+ * Static grey-box markers for the level's entity placements (diamonds, sacks,
+ * bank, spawners — tech-spec §10). Plain Meshes sharing one geometry+material
+ * per entity type (not InstancedMesh): unlike tiles there are only a handful
+ * of these per level, and collection/physics behavior isn't wired up yet
+ * (future issue) — this just proves the loaded level's entities reach the
+ * renderer, at the same GPU cost tileMeshes already pays per type.
+ */
+function buildEntityMeshes(entities: LevelEntities): THREE.Object3D[] {
+  const kinds: EntityMarkerKind[] = [
+    {
+      positions: entities.diamonds,
+      geometry: new THREE.OctahedronGeometry(0.22),
+      color: DIAMOND_COLOR,
+      roughness: 0.25,
+      metalness: 0.3,
+      z: 0.15,
+    },
+    {
+      positions: entities.sacks,
+      geometry: new THREE.BoxGeometry(0.6, 0.55, 0.55),
+      color: SACK_COLOR,
+      roughness: 0.9,
+      metalness: 0,
+      z: 0.1,
+    },
+    {
+      positions: entities.spawners,
+      geometry: new THREE.CylinderGeometry(0.3, 0.3, 0.12, 12),
+      color: SPAWNER_COLOR,
+      roughness: 0.9,
+      metalness: 0,
+      z: 0.06,
+      layFlat: true,
+    },
+    {
+      positions: entities.bank ? [entities.bank] : [],
+      geometry: new THREE.BoxGeometry(0.8, 0.8, 0.3),
+      color: BANK_COLOR,
+      roughness: 0.6,
+      metalness: 0.1,
+      z: 0.05,
+    },
+  ];
+
+  return kinds.flatMap(({ positions, geometry, color, roughness, metalness, z, layFlat }) => {
+    const material = new THREE.MeshStandardMaterial({ color, roughness, metalness });
+    return toEntityWorldPositions(positions).map(({ x, y }) => {
+      const mesh = new THREE.Mesh(geometry, material);
+      if (layFlat) mesh.rotation.x = Math.PI / 2;
+      mesh.position.set(x, y, z);
+      return mesh;
+    });
+  });
+}
+
 export interface InitialPlayerPosition {
   x: number;
   y: number;
@@ -137,7 +211,7 @@ export interface SceneHandle {
   dispose(): void;
 }
 
-export function buildScene(grid: TileGrid, initialPlayer: InitialPlayerPosition): SceneHandle {
+export function buildScene(grid: TileGrid, initialPlayer: InitialPlayerPosition, entities: LevelEntities): SceneHandle {
   const scene = new THREE.Scene();
   scene.background = new THREE.Color(SKY_COLOR);
 
@@ -165,6 +239,8 @@ export function buildScene(grid: TileGrid, initialPlayer: InitialPlayerPosition)
 
   const grass = buildGrassStrip(grid);
   scene.add(grass);
+
+  scene.add(...buildEntityMeshes(entities));
 
   const player = buildPlayerBlob();
   const playerShadow = buildPlayerShadow();

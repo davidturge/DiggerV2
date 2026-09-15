@@ -1,0 +1,12 @@
+{
+  "defaults": {
+    "tickRate": 30,
+    "playerSpeed": 4.5,
+    "rockHitsToClear": 2
+  },
+  "difficulty": {
+    "easy": {},
+    "medium": {},
+    "hard": {}
+  }
+}

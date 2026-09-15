@@ -1,14 +1,13 @@
 import { describe, expect, it } from 'vitest';
 import type { Command } from './commands';
-import { advanceTick, createGameState, createRng, TICK_RATE } from './sim';
+import { advanceTick, createGameState, createRng } from './sim';
+import type { ResolvedTuning } from './tuning';
+
+const TUNING: ResolvedTuning = { tickRate: 30, playerSpeed: 4.5, rockHitsToClear: 2 };
 
 describe('sim scaffold', () => {
-  it('runs at 30 ticks per second', () => {
-    expect(TICK_RATE).toBe(30);
-  });
-
   it('advances ticks immutably', () => {
-    const s0 = createGameState(42, ['RRR', 'RPR', 'RRR']);
+    const s0 = createGameState(42, ['RRR', 'RPR', 'RRR'], TUNING);
     const { state: s1 } = advanceTick(s0, []);
     expect(s0.tick).toBe(0);
     expect(s1.tick).toBe(1);
@@ -26,14 +25,14 @@ describe('sim scaffold', () => {
 
 describe('level parsing', () => {
   it('places the player at the P marker, centered in its tile', () => {
-    const state = createGameState(1, ['RRRR', 'RPRR', 'RRRR']);
+    const state = createGameState(1, ['RRRR', 'RPRR', 'RRRR'], TUNING);
     expect(state.player).toEqual({ x: 1.5, y: 1.5 });
   });
 });
 
 describe('digging', () => {
   it('auto-digs dirt on cell entry and emits tile-dug', () => {
-    let state = createGameState(1, ['RRRR', 'RPDR', 'RRRR']);
+    let state = createGameState(1, ['RRRR', 'RPDR', 'RRRR'], TUNING);
     const move: Command[] = [{ type: 'move', direction: 'e' }];
     const allEvents = [];
     for (let i = 0; i < 12; i++) {
@@ -51,7 +50,7 @@ describe('digging', () => {
 
 describe('rock', () => {
   it('takes exactly 2 dig-hits to clear, blocking movement until then', () => {
-    let state = createGameState(1, ['RRRR', 'PR R', 'RRRR']);
+    let state = createGameState(1, ['RRRR', 'PR R', 'RRRR'], TUNING);
     const move: Command[] = [{ type: 'move', direction: 'e' }];
 
     // Tick 1: closes the gap to the rock face, no collision yet.
@@ -85,7 +84,7 @@ describe('rock', () => {
     // Rock at (2,2) with open orthogonal neighbors (2,1) and (1,2) — a diagonal
     // 'se' approach can overlap the rock from both the x-pass and y-pass of a
     // single tick's axis resolution; that must still only count as one hit.
-    let state = createGameState(1, ['RRRRR', 'RP  R', 'R RRR', 'RRRRR']);
+    let state = createGameState(1, ['RRRRR', 'RP  R', 'R RRR', 'RRRRR'], TUNING);
     const move: Command[] = [{ type: 'move', direction: 'se' }];
 
     let sawFirstHit = false;
@@ -107,7 +106,7 @@ describe('rock', () => {
 
 describe('collision', () => {
   it('blocks movement at the grid bounds', () => {
-    let state = createGameState(1, ['RRRR', 'P  R', 'RRRR']);
+    let state = createGameState(1, ['RRRR', 'P  R', 'RRRR'], TUNING);
     const move: Command[] = [{ type: 'move', direction: 'w' }];
 
     for (let i = 0; i < 10; i++) {
@@ -125,7 +124,7 @@ describe('collision', () => {
 describe('diagonal gap', () => {
   it('refuses to corner-cut between two rock tiles touching at a point', () => {
     const rows = ['RRRR', 'RPRR', 'RR R', 'RRRR'];
-    let state = createGameState(1, rows);
+    let state = createGameState(1, rows, TUNING);
     const startX = state.player.x;
     const startY = state.player.y;
     const move: Command[] = [{ type: 'move', direction: 'se' }];
@@ -143,7 +142,7 @@ describe('diagonal gap', () => {
 
 describe('shoot / useAbility', () => {
   it('are accepted as no-op stubs', () => {
-    const state = createGameState(1, ['RRR', 'RPR', 'RRR']);
+    const state = createGameState(1, ['RRR', 'RPR', 'RRR'], TUNING);
     const { state: s1 } = advanceTick(state, [{ type: 'shoot' }, { type: 'useAbility' }]);
     expect(s1.player).toEqual(state.player);
     expect(s1.tick).toBe(1);
@@ -163,7 +162,7 @@ describe('determinism', () => {
     ];
 
     function run() {
-      let state = createGameState(7, rows);
+      let state = createGameState(7, rows, TUNING);
       const events = [];
       for (let i = 0; i < 30; i++) {
         const cmd = commands[i % commands.length] ?? [];

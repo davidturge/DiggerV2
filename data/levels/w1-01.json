@@ -1,0 +1,29 @@
+{
+  "id": "w1-01",
+  "name": "First Dig",
+  "world": 1,
+  "type": "collection",
+  "params": {},
+  "grid": [
+    "RRRRRRRRRRRRRRRRRRRRRR",
+    "RDPDBD*DD*DDD*DDD*DDDR",
+    "RDDDDDDDDDDDDDDDDDDDDR",
+    "RDD*DDD*DRD*DDD*DDD*DR",
+    "RDDDDDDDDDDDDDDDDDDDDR",
+    "RDDDD*DRD*DDD*DDDRDDDR",
+    "RDDDDDDDDDDDDDDDDDDDDR",
+    "RDD*DRD*DDDRDDD*DDD*DR",
+    "RDDDDDDDDDDDDDDDDDDDDR",
+    "RDDDD*DDD*DDD*DRD*DDDR",
+    "RDDDDDDDDDDDDDDDDDDDDR",
+    "RDD*DDDD*DDDD*DDDD*DDR",
+    "RDDDDDDDDDDDDDDDDDDDDR",
+    "RRRRRRRRRRRRRRRRRRRRRR"
+  ],
+  "spawners": [],
+  "starThresholds": {
+    "diamondPercentForStar2": 80
+  },
+  "parTimeMs": 90000,
+  "tuningOverrides": {}
+}

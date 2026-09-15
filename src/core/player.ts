@@ -8,9 +8,6 @@ import type { SimEvent } from './events';
 /** Tiles; ~1/3 of a tile so the digger reads as sized-to-tunnel-width. */
 export const PLAYER_RADIUS = 0.34;
 
-/** Tiles/sec. Placeholder until tuning.json lands (tech-spec §10). */
-export const PLAYER_SPEED = 4.5;
-
 export interface PlayerState {
   x: number;
   y: number;
@@ -133,6 +130,7 @@ export function resolveMovement(
   player: PlayerState,
   direction: { dx: number; dy: number } | null,
   dt: number,
+  playerSpeed: number,
 ): MoveResult {
   const events: SimEvent[] = [];
   if (!direction || (direction.dx === 0 && direction.dy === 0)) {
@@ -150,14 +148,14 @@ export function resolveMovement(
   const hitThisTick = new Set<string>();
 
   if (dx !== 0) {
-    const candidateX = x + dx * PLAYER_SPEED * dt;
+    const candidateX = x + dx * playerSpeed * dt;
     const resolved = resolveAxis(nextGrid, candidateX, y, 'x', PLAYER_RADIUS, events, hitThisTick);
     nextGrid = resolved.grid;
     if (resolved.value !== null) x = resolved.value;
   }
 
   if (dy !== 0) {
-    const candidateY = y + dy * PLAYER_SPEED * dt;
+    const candidateY = y + dy * playerSpeed * dt;
     const resolved = resolveAxis(nextGrid, x, candidateY, 'y', PLAYER_RADIUS, events, hitThisTick);
     nextGrid = resolved.grid;
     if (resolved.value !== null) y = resolved.value;
