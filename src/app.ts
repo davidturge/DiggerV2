@@ -6,7 +6,7 @@ import tuningDocument from '../data/tuning.json';
 import w101Document from '../data/levels/w1-01.json';
 import type { Command } from './core/commands';
 import type { SimEvent } from './core/events';
-import type { Level } from './core/level';
+import type { Level, LevelEntities } from './core/level';
 import { parseLevelDocument } from './core/level';
 import { advanceTick, createGameState, createGameStateFromLevel, type GameState } from './core/sim';
 import type { Difficulty, ResolvedTuning, TuningData } from './core/tuning';
@@ -57,6 +57,42 @@ export function runDemoTicks(): DemoResult {
     state = result.state;
     events.push(...result.events);
   }
+  return { state, events };
+}
+
+// Grey-box sack demo (issue #6): a sack undermined by digging its dirt
+// support, with solid rock one tile below so a clean escape lands it intact.
+// Uses DEFAULT_TUNING — resolved from the real data/tuning.json, same as
+// runDemoTicks — so this proves sackWobbleMs/sackFallTilesPerSecond actually
+// drive sack behavior through the exact createGameState + advanceTick
+// composition src/main.ts boots, not a hand-built harness.
+export const SACK_DEMO_LEVEL: readonly string[] = ['RRRRR', 'RG  R', 'RDP R', 'RR  R', 'RRRRR'];
+const SACK_DEMO_ENTITIES: LevelEntities = { diamonds: [], sacks: [{ col: 1, row: 1 }], bank: null, spawners: [] };
+const SACK_DEMO_DIG_TICKS = 10;
+const SACK_DEMO_ESCAPE_TICKS = 10;
+const SACK_DEMO_WAIT_TICKS = 80;
+
+export interface SackDemoResult {
+  state: GameState;
+  events: SimEvent[];
+}
+
+export function runSackDemoTicks(): SackDemoResult {
+  let state = createGameState(2, SACK_DEMO_LEVEL, DEFAULT_TUNING, SACK_DEMO_ENTITIES);
+  const events: SimEvent[] = [];
+
+  function run(commands: Command[], ticks: number): void {
+    for (let i = 0; i < ticks; i++) {
+      const result = advanceTick(state, commands);
+      state = result.state;
+      events.push(...result.events);
+    }
+  }
+
+  run([{ type: 'move', direction: 'w' }], SACK_DEMO_DIG_TICKS); // dig out the support
+  run([{ type: 'move', direction: 'e' }], SACK_DEMO_ESCAPE_TICKS); // retreat out of the drop column
+  run([], SACK_DEMO_WAIT_TICKS); // wait out the wobble telegraph and the fall
+
   return { state, events };
 }
 

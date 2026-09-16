@@ -9,6 +9,8 @@ const VALID_DOCUMENT = {
     carryWeightPerDiamond: 0.03,
     carryWeightMinMultiplier: 0.4,
     respawnInvulnerabilityMs: 1500,
+    sackWobbleMs: 1800,
+    sackFallTilesPerSecond: 6,
   },
   difficulty: {
     easy: { playerSpeed: 0.9 },

@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import type { Command } from './commands';
 import type { SimEvent } from './events';
 import type { LevelEntities } from './level';
-import { advanceTick, createGameState, createRng } from './sim';
+import { advanceTick, createGameState, createRng, type GameState } from './sim';
 import type { ResolvedTuning } from './tuning';
 
 const TUNING: ResolvedTuning = {
@@ -12,6 +12,8 @@ const TUNING: ResolvedTuning = {
   carryWeightPerDiamond: 0.03,
   carryWeightMinMultiplier: 0.4,
   respawnInvulnerabilityMs: 1500,
+  sackWobbleMs: 1800,
+  sackFallTilesPerSecond: 6,
 };
 
 describe('sim scaffold', () => {
@@ -146,6 +148,109 @@ describe('diagonal gap', () => {
 
     expect(state.player.x).toBe(startX);
     expect(state.player.y).toBe(startY);
+  });
+});
+
+describe('sacks (composed through advanceTick — movement + push + physics together)', () => {
+  function runTicks(
+    state: GameState,
+    commandsPerTick: readonly Command[],
+    ticks: number,
+  ): { state: GameState; events: SimEvent[] } {
+    let events: SimEvent[] = [];
+    for (let i = 0; i < ticks; i++) {
+      const result = advanceTick(state, commandsPerTick);
+      state = result.state;
+      events = events.concat(result.events);
+    }
+    return { state, events };
+  }
+
+  it('blocks the player instead of letting them walk through a resting sack', () => {
+    // Sack at (2,1) with rock beyond it — nothing to push into, so it just blocks.
+    let state = createGameState(1, ['RRRR', 'RPGR', 'RRRR'], TUNING, {
+      diamonds: [],
+      sacks: [{ col: 2, row: 1 }],
+      bank: null,
+      spawners: [],
+    });
+    const move: Command[] = [{ type: 'move', direction: 'e' }];
+    for (let i = 0; i < 20; i++) {
+      ({ state } = advanceTick(state, move));
+    }
+    expect(state.player.x).toBeLessThan(2);
+    expect(state.sacks).toEqual([{ id: 0, col: 2, row: 1, status: 'resting', elapsedMs: 0, fallOriginRow: 1 }]);
+  });
+
+  it('pushes a resting sack one cell into open tunnel and then follows it in', () => {
+    let state = createGameState(1, ['RRRRR', 'RPG R', 'RRRRR'], TUNING, {
+      diamonds: [],
+      sacks: [{ col: 2, row: 1 }],
+      bank: null,
+      spawners: [],
+    });
+    const move: Command[] = [{ type: 'move', direction: 'e' }];
+    let allEvents: SimEvent[] = [];
+    for (let i = 0; i < 20; i++) {
+      const result = advanceTick(state, move);
+      state = result.state;
+      allEvents = allEvents.concat(result.events);
+    }
+
+    expect(allEvents).toContainEqual({ type: 'sack-pushed', fromCol: 2, fromRow: 1, toCol: 3, toRow: 1 });
+    expect(state.sacks[0]).toMatchObject({ col: 3, row: 1, status: 'resting' });
+    expect(state.player.x).toBeGreaterThan(2.5); // followed the sack into its old cell
+  });
+
+  it('digging away a sack\'s support starts the wobble telegraph, and the sack lands intact one tile down once the player is clear', () => {
+    // Sack at (1,1) sits on dirt at (1,2); solid rock at (1,3) stops the fall
+    // after exactly one tile. Player starts beside the support column, digs
+    // it out by walking west into it, then retreats east out of the drop path.
+    let state = createGameState(1, ['RRRRR', 'RG  R', 'RDP R', 'RR  R', 'RRRRR'], TUNING, {
+      diamonds: [],
+      sacks: [{ col: 1, row: 1 }],
+      bank: null,
+      spawners: [],
+    });
+
+    let events: SimEvent[] = [];
+    const digResult = runTicks(state, [{ type: 'move', direction: 'w' }], 10);
+    state = digResult.state;
+    events = events.concat(digResult.events);
+    expect(events).toContainEqual({ type: 'sack-wobble-started', col: 1, row: 1 });
+    expect(state.sacks[0]?.status).toBe('wobbling');
+
+    const escapeResult = runTicks(state, [{ type: 'move', direction: 'e' }], 10);
+    state = escapeResult.state;
+    events = events.concat(escapeResult.events);
+    expect(Math.floor(state.player.x)).not.toBe(1); // clear of the fall column
+
+    const waitResult = runTicks(state, [], 80);
+    state = waitResult.state;
+    events = events.concat(waitResult.events);
+
+    expect(events).toContainEqual({ type: 'sack-landed', col: 1, row: 2, tilesFallen: 1, brokeApart: false });
+    expect(events.some((e) => e.type === 'player-crushed')).toBe(false);
+    expect(state.sacks).toEqual([{ id: 0, col: 1, row: 2, status: 'resting', elapsedMs: 0, fallOriginRow: 1 }]);
+  });
+
+  it('crushes the player if they stay under the sack they just undermined', () => {
+    let state = createGameState(1, ['RRRRR', 'RG  R', 'RDP R', 'RR  R', 'RRRRR'], TUNING, {
+      diamonds: [],
+      sacks: [{ col: 1, row: 1 }],
+      bank: null,
+      spawners: [],
+    });
+
+    // Dig out the support, but only enough to still be standing under column 1.
+    const digResult = runTicks(state, [{ type: 'move', direction: 'w' }], 5);
+    state = digResult.state;
+    expect(Math.floor(state.player.x)).toBe(1);
+
+    const waitResult = runTicks(state, [], 80);
+    const events = digResult.events.concat(waitResult.events);
+
+    expect(events).toContainEqual({ type: 'player-crushed', col: 1, row: 2 });
   });
 });
 
@@ -325,5 +430,35 @@ describe('level completion (collection levels)', () => {
       state = advanceTick(state, [{ type: 'move', direction: 'e' }]).state;
     }
     expect(state.completed).toBe(false);
+  });
+});
+
+describe('sack crush → death/respawn (issues #5 + #6 wired together)', () => {
+  const ROWS = ['RRRRR', 'RG  R', 'RDP R', 'RR  R', 'RRRRR'];
+  const ENTITIES: LevelEntities = { diamonds: [], sacks: [{ col: 1, row: 1 }], bank: null, spawners: [] };
+
+  function runTicks(state: GameState, commands: Command[], ticks: number) {
+    const events: SimEvent[] = [];
+    for (let i = 0; i < ticks; i++) {
+      const r = advanceTick(state, commands);
+      state = r.state;
+      events.push(...r.events);
+    }
+    return { state, events };
+  }
+
+  it('a sack falling onto the player kills them and respawns them at the start with grace ticks', () => {
+    const start = createGameState(3, ROWS, TUNING, ENTITIES);
+    // Dig out the support under the sack and stay in the drop column.
+    const dug = runTicks(start, [{ type: 'move', direction: 'w' }], 10);
+    expect(dug.events).toContainEqual({ type: 'sack-wobble-started', col: 1, row: 1 });
+    // Wait out the wobble telegraph; the sack drops onto the player.
+    const after = runTicks(dug.state, [], 90);
+
+    expect(after.events.some((e) => e.type === 'player-crushed')).toBe(true);
+    expect(after.events.some((e) => e.type === 'player-died')).toBe(true);
+    expect(after.events).toContainEqual({ type: 'player-respawned', x: start.player.x, y: start.player.y });
+    expect(after.state.player).toEqual(start.player);
+    expect(after.state.invulnerableUntilTick).toBeGreaterThan(dug.state.tick);
   });
 });

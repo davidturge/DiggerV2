@@ -17,6 +17,10 @@ export interface TuningDefaults {
   carryWeightMinMultiplier: number;
   /** Brief invulnerability window after respawn, in ms. */
   respawnInvulnerabilityMs: number;
+  /** Wobble telegraph duration (design.md §2.4) between a sack losing support and it starting to fall. */
+  sackWobbleMs: number;
+  /** Fall speed once a sack drops, in tiles/second (tile-by-tile, tech-spec §6). */
+  sackFallTilesPerSecond: number;
 }
 
 export type ResolvedTuning = TuningDefaults;
@@ -28,6 +32,8 @@ const TUNING_KEYS = [
   'carryWeightPerDiamond',
   'carryWeightMinMultiplier',
   'respawnInvulnerabilityMs',
+  'sackWobbleMs',
+  'sackFallTilesPerSecond',
 ] as const satisfies readonly (keyof TuningDefaults)[];
 
 const DIFFICULTIES: readonly Difficulty[] = ['easy', 'medium', 'hard'];
@@ -59,6 +65,8 @@ function parseDefaults(data: unknown): TuningDefaults {
     carryWeightPerDiamond: readPositiveFiniteNumber(data, 'carryWeightPerDiamond', 'defaults'),
     carryWeightMinMultiplier: readPositiveFiniteNumber(data, 'carryWeightMinMultiplier', 'defaults'),
     respawnInvulnerabilityMs: readPositiveFiniteNumber(data, 'respawnInvulnerabilityMs', 'defaults'),
+    sackWobbleMs: readPositiveFiniteNumber(data, 'sackWobbleMs', 'defaults'),
+    sackFallTilesPerSecond: readPositiveFiniteNumber(data, 'sackFallTilesPerSecond', 'defaults'),
   };
 }
 
