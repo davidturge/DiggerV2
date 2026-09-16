@@ -2,7 +2,14 @@ import { describe, expect, it } from 'vitest';
 import { parseTuningDocument, resolveTuning, type TuningData } from './tuning';
 
 const VALID_DOCUMENT = {
-  defaults: { tickRate: 30, playerSpeed: 4.5, rockHitsToClear: 2 },
+  defaults: {
+    tickRate: 30,
+    playerSpeed: 4.5,
+    rockHitsToClear: 2,
+    carryWeightPerDiamond: 0.03,
+    carryWeightMinMultiplier: 0.4,
+    respawnInvulnerabilityMs: 1500,
+  },
   difficulty: {
     easy: { playerSpeed: 0.9 },
     medium: {},
@@ -69,7 +76,7 @@ describe('resolveTuning', () => {
   const tuning: TuningData = parseTuningDocument(VALID_DOCUMENT);
 
   it('resolves plain defaults when there is no multiplier or override', () => {
-    expect(resolveTuning(tuning, 'medium')).toEqual({ tickRate: 30, playerSpeed: 4.5, rockHitsToClear: 2 });
+    expect(resolveTuning(tuning, 'medium')).toEqual(VALID_DOCUMENT.defaults);
   });
 
   it('layers a difficulty multiplier on top of the default', () => {

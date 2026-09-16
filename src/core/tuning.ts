@@ -11,11 +11,24 @@ export interface TuningDefaults {
   tickRate: number;
   playerSpeed: number;
   rockHitsToClear: number;
+  /** Fraction of playerSpeed shaved off per carried (undeposited) diamond (design.md §2.8). */
+  carryWeightPerDiamond: number;
+  /** Floor on the carry-weight speed multiplier so a full load never stops the player outright. */
+  carryWeightMinMultiplier: number;
+  /** Brief invulnerability window after respawn, in ms. */
+  respawnInvulnerabilityMs: number;
 }
 
 export type ResolvedTuning = TuningDefaults;
 
-const TUNING_KEYS = ['tickRate', 'playerSpeed', 'rockHitsToClear'] as const satisfies readonly (keyof TuningDefaults)[];
+const TUNING_KEYS = [
+  'tickRate',
+  'playerSpeed',
+  'rockHitsToClear',
+  'carryWeightPerDiamond',
+  'carryWeightMinMultiplier',
+  'respawnInvulnerabilityMs',
+] as const satisfies readonly (keyof TuningDefaults)[];
 
 const DIFFICULTIES: readonly Difficulty[] = ['easy', 'medium', 'hard'];
 
@@ -43,6 +56,9 @@ function parseDefaults(data: unknown): TuningDefaults {
     tickRate: readPositiveFiniteNumber(data, 'tickRate', 'defaults'),
     playerSpeed: readPositiveFiniteNumber(data, 'playerSpeed', 'defaults'),
     rockHitsToClear: readPositiveFiniteNumber(data, 'rockHitsToClear', 'defaults'),
+    carryWeightPerDiamond: readPositiveFiniteNumber(data, 'carryWeightPerDiamond', 'defaults'),
+    carryWeightMinMultiplier: readPositiveFiniteNumber(data, 'carryWeightMinMultiplier', 'defaults'),
+    respawnInvulnerabilityMs: readPositiveFiniteNumber(data, 'respawnInvulnerabilityMs', 'defaults'),
   };
 }
 
