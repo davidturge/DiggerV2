@@ -3,6 +3,9 @@
     "tickRate": 30,
     "playerSpeed": 4.5,
     "rockHitsToClear": 2,
+    "carryWeightPerDiamond": 0.03,
+    "carryWeightMinMultiplier": 0.4,
+    "respawnInvulnerabilityMs": 1500,
     "sackWobbleMs": 1800,
     "sackFallTilesPerSecond": 6
   },

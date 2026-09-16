@@ -11,6 +11,12 @@ export interface TuningDefaults {
   tickRate: number;
   playerSpeed: number;
   rockHitsToClear: number;
+  /** Fraction of playerSpeed shaved off per carried (undeposited) diamond (design.md §2.8). */
+  carryWeightPerDiamond: number;
+  /** Floor on the carry-weight speed multiplier so a full load never stops the player outright. */
+  carryWeightMinMultiplier: number;
+  /** Brief invulnerability window after respawn, in ms. */
+  respawnInvulnerabilityMs: number;
   /** Wobble telegraph duration (design.md §2.4) between a sack losing support and it starting to fall. */
   sackWobbleMs: number;
   /** Fall speed once a sack drops, in tiles/second (tile-by-tile, tech-spec §6). */
@@ -23,6 +29,9 @@ const TUNING_KEYS = [
   'tickRate',
   'playerSpeed',
   'rockHitsToClear',
+  'carryWeightPerDiamond',
+  'carryWeightMinMultiplier',
+  'respawnInvulnerabilityMs',
   'sackWobbleMs',
   'sackFallTilesPerSecond',
 ] as const satisfies readonly (keyof TuningDefaults)[];
@@ -53,6 +62,9 @@ function parseDefaults(data: unknown): TuningDefaults {
     tickRate: readPositiveFiniteNumber(data, 'tickRate', 'defaults'),
     playerSpeed: readPositiveFiniteNumber(data, 'playerSpeed', 'defaults'),
     rockHitsToClear: readPositiveFiniteNumber(data, 'rockHitsToClear', 'defaults'),
+    carryWeightPerDiamond: readPositiveFiniteNumber(data, 'carryWeightPerDiamond', 'defaults'),
+    carryWeightMinMultiplier: readPositiveFiniteNumber(data, 'carryWeightMinMultiplier', 'defaults'),
+    respawnInvulnerabilityMs: readPositiveFiniteNumber(data, 'respawnInvulnerabilityMs', 'defaults'),
     sackWobbleMs: readPositiveFiniteNumber(data, 'sackWobbleMs', 'defaults'),
     sackFallTilesPerSecond: readPositiveFiniteNumber(data, 'sackFallTilesPerSecond', 'defaults'),
   };

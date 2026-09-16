@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import type { Command } from './commands';
 import type { SimEvent } from './events';
+import type { LevelEntities } from './level';
 import { advanceTick, createGameState, createRng, type GameState } from './sim';
 import type { ResolvedTuning } from './tuning';
 
@@ -8,6 +9,9 @@ const TUNING: ResolvedTuning = {
   tickRate: 30,
   playerSpeed: 4.5,
   rockHitsToClear: 2,
+  carryWeightPerDiamond: 0.03,
+  carryWeightMinMultiplier: 0.4,
+  respawnInvulnerabilityMs: 1500,
   sackWobbleMs: 1800,
   sackFallTilesPerSecond: 6,
 };
@@ -316,5 +320,145 @@ describe('vertical movement', () => {
     }
     expect(state.player.x).toBeGreaterThan(start.x);
     expect(state.player.y).toBeLessThan(start.y);
+  });
+});
+
+describe('diamond pickup and bank deposit', () => {
+  const ROWS = ['RRRRRR', 'RP   R', 'RRRRRR'];
+  const ENTITIES: LevelEntities = {
+    diamonds: [{ col: 2, row: 1 }],
+    sacks: [],
+    bank: { col: 3, row: 1 },
+    spawners: [],
+  };
+
+  it('picks up the diamond on overlap, carries it, then deposits it at the bank', () => {
+    let state = createGameState(1, ROWS, TUNING, ENTITIES);
+    const allEvents: SimEvent[] = [];
+    let sawCarrying = false;
+
+    for (let i = 0; i < 60; i++) {
+      const result = advanceTick(state, [{ type: 'move', direction: 'e' }]);
+      state = result.state;
+      allEvents.push(...result.events);
+      if (state.carriedDiamonds > 0) sawCarrying = true;
+    }
+
+    expect(allEvents).toContainEqual({ type: 'diamond-picked-up', id: 0, x: 2.5, y: 1.5 });
+    expect(sawCarrying).toBe(true); // proves carrying happened between pickup and deposit, not in the same tick
+    expect(allEvents).toContainEqual({ type: 'diamonds-deposited', count: 1, bankedTotal: 1 });
+    expect(allEvents).toContainEqual({ type: 'level-up' });
+    expect(state.carriedDiamonds).toBe(0);
+    expect(state.bankedDiamonds).toBe(1);
+    expect(state.diamonds).toEqual([]); // picked-up diamond is off the ground for good
+  });
+
+  it('leaves a diamond on the ground and carried count at zero when the player never reaches it', () => {
+    let state = createGameState(1, ROWS, TUNING, ENTITIES);
+    for (let i = 0; i < 10; i++) {
+      state = advanceTick(state, []).state; // no movement command
+    }
+    expect(state.diamonds).toHaveLength(1);
+    expect(state.carriedDiamonds).toBe(0);
+    expect(state.bankedDiamonds).toBe(0);
+  });
+});
+
+describe('carry weight slows movement', () => {
+  const ROWS = ['RRRRR', 'RP  R', 'RRRRR'];
+
+  it('moves proportionally less per tick the more diamonds are carried', () => {
+    const light = advanceTick(createGameState(1, ROWS, TUNING), [{ type: 'move', direction: 'e' }]).state;
+    const heavyStart = { ...createGameState(1, ROWS, TUNING), carriedDiamonds: 10 };
+    const heavy = advanceTick(heavyStart, [{ type: 'move', direction: 'e' }]).state;
+
+    const lightDx = light.player.x - 1.5;
+    const heavyDx = heavy.player.x - 1.5;
+    expect(heavyDx).toBeLessThan(lightDx);
+    expect(heavyDx).toBeCloseTo(lightDx * (1 - 10 * TUNING.carryWeightPerDiamond), 5);
+  });
+
+  it('never slows below the tuned floor multiplier, however much is carried', () => {
+    const overloaded = { ...createGameState(1, ROWS, TUNING), carriedDiamonds: 1000 };
+    const result = advanceTick(overloaded, [{ type: 'move', direction: 'e' }]).state;
+    const dx = result.player.x - 1.5;
+    expect(dx).toBeCloseTo(TUNING.playerSpeed * TUNING.carryWeightMinMultiplier * (1 / TUNING.tickRate), 5);
+  });
+
+  it('returns to full speed the tick after depositing everything carried at the bank', () => {
+    const rows = ['RRRRRR', 'RP   R', 'RRRRRR'];
+    const entities: LevelEntities = { diamonds: [], sacks: [], bank: { col: 3, row: 1 }, spawners: [] };
+    // Player starts already on the bank tile, carrying a heavy load — deposits on the very first tick.
+    const heavyOnBank = { ...createGameState(1, rows, TUNING, entities), player: { x: 3.5, y: 1.5 }, carriedDiamonds: 10 };
+    const afterDeposit = advanceTick(heavyOnBank, []).state;
+    expect(afterDeposit.carriedDiamonds).toBe(0);
+
+    const nextTick = advanceTick(afterDeposit, [{ type: 'move', direction: 'e' }]).state;
+    const dx = nextTick.player.x - afterDeposit.player.x;
+    expect(dx).toBeCloseTo(TUNING.playerSpeed * (1 / TUNING.tickRate), 5);
+  });
+});
+
+describe('level completion (collection levels)', () => {
+  const ROWS = ['RRRRRR', 'RP   R', 'RRRRRR'];
+  const ENTITIES: LevelEntities = {
+    diamonds: [{ col: 2, row: 1 }],
+    sacks: [],
+    bank: { col: 3, row: 1 },
+    spawners: [],
+  };
+
+  it("completes once the level's only diamond is picked up and deposited, emitting level-complete", () => {
+    let state = createGameState(1, ROWS, TUNING, ENTITIES, 'collection');
+    const allEvents: SimEvent[] = [];
+
+    for (let i = 0; i < 80; i++) {
+      const result = advanceTick(state, [{ type: 'move', direction: 'e' }]);
+      state = result.state;
+      allEvents.push(...result.events);
+      if (state.completed) break;
+    }
+
+    expect(state.completed).toBe(true);
+    expect(state.bankedDiamonds).toBe(1);
+    expect(allEvents).toContainEqual({ type: 'level-complete', elapsedTicks: state.tick });
+  });
+
+  it('never completes when the state has no level type (e.g. the app.ts grey-box demo)', () => {
+    let state = createGameState(1, ROWS, TUNING, ENTITIES);
+    for (let i = 0; i < 80; i++) {
+      state = advanceTick(state, [{ type: 'move', direction: 'e' }]).state;
+    }
+    expect(state.completed).toBe(false);
+  });
+});
+
+describe('sack crush → death/respawn (issues #5 + #6 wired together)', () => {
+  const ROWS = ['RRRRR', 'RG  R', 'RDP R', 'RR  R', 'RRRRR'];
+  const ENTITIES: LevelEntities = { diamonds: [], sacks: [{ col: 1, row: 1 }], bank: null, spawners: [] };
+
+  function runTicks(state: GameState, commands: Command[], ticks: number) {
+    const events: SimEvent[] = [];
+    for (let i = 0; i < ticks; i++) {
+      const r = advanceTick(state, commands);
+      state = r.state;
+      events.push(...r.events);
+    }
+    return { state, events };
+  }
+
+  it('a sack falling onto the player kills them and respawns them at the start with grace ticks', () => {
+    const start = createGameState(3, ROWS, TUNING, ENTITIES);
+    // Dig out the support under the sack and stay in the drop column.
+    const dug = runTicks(start, [{ type: 'move', direction: 'w' }], 10);
+    expect(dug.events).toContainEqual({ type: 'sack-wobble-started', col: 1, row: 1 });
+    // Wait out the wobble telegraph; the sack drops onto the player.
+    const after = runTicks(dug.state, [], 90);
+
+    expect(after.events.some((e) => e.type === 'player-crushed')).toBe(true);
+    expect(after.events.some((e) => e.type === 'player-died')).toBe(true);
+    expect(after.events).toContainEqual({ type: 'player-respawned', x: start.player.x, y: start.player.y });
+    expect(after.state.player).toEqual(start.player);
+    expect(after.state.invulnerableUntilTick).toBeGreaterThan(dug.state.tick);
   });
 });
